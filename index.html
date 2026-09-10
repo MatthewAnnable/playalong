@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Play-Along</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/design/matthewannable.css" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <header class="app-header">
+        <h1>Play-Along</h1>
+      </header>
+
+      <div id="drop-zone" class="drop-zone">
+        <p>Drag a <code>.gp</code> file here, or click to choose one</p>
+        <input id="file-input" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx" hidden />
+      </div>
+
+      <div id="player" class="player" hidden>
+        <div class="transport">
+          <button id="play-button" class="btn-amber" type="button">Play</button>
+          <select id="track-select"></select>
+        </div>
+        <div id="alphatab" class="alphatab-surface"></div>
+      </div>
+
+      <p id="status" class="status" role="status"></p>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

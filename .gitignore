@@ -1,0 +1,4 @@
+test-songs/
+node_modules/
+dist/
+public/

@@ -1,0 +1,95 @@
+/* Phase 0 shell only — full branded player chrome is built in Phase 1. */
+
+#app {
+  max-width: var(--ma-container);
+  margin: 0 auto;
+  padding: var(--ma-section-y) var(--ma-section-x);
+}
+
+.app-header h1 {
+  margin: 0 0 var(--ma-gap);
+}
+
+.drop-zone {
+  border: 1px dashed var(--ma-line-strong);
+  border-radius: var(--ma-radius-card);
+  padding: var(--ma-card-pad);
+  text-align: center;
+  color: var(--ma-ink-soft);
+  cursor: pointer;
+}
+
+.drop-zone.is-dragover {
+  border-color: var(--ma-green);
+  color: var(--ma-ink);
+  background: var(--ma-paper-2);
+}
+
+.player {
+  margin-top: var(--ma-gap);
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: var(--ma-gap);
+  margin-bottom: var(--ma-gap);
+}
+
+.btn-amber {
+  font-family: var(--ma-font-ui);
+  font-weight: 700;
+  font-size: var(--ma-size-body);
+  min-height: var(--ma-tap-primary);
+  padding: 0 28px;
+  border: none;
+  border-radius: var(--ma-radius-pill);
+  background: var(--ma-amber);
+  color: var(--ma-ink);
+  box-shadow: var(--ma-shadow-amber);
+  cursor: pointer;
+}
+
+.btn-amber:hover {
+  background: var(--ma-amber-hover);
+}
+
+#track-select {
+  min-height: var(--ma-tap);
+  border-radius: var(--ma-radius-sm);
+  border: 1px solid var(--ma-line-strong);
+  background: var(--ma-card);
+  padding: 0 12px;
+  font-family: var(--ma-font-ui);
+  color: var(--ma-ink);
+}
+
+.alphatab-surface {
+  background: var(--ma-paper);
+  border: 1px solid var(--ma-line);
+  border-radius: var(--ma-radius-card);
+  padding: var(--ma-card-pad);
+  overflow-x: auto;
+}
+
+.status {
+  color: var(--ma-ink-soft);
+  font-size: var(--ma-size-small);
+  min-height: 1.5em;
+}
+
+.status.is-error {
+  color: var(--ma-danger);
+}
+
+/* Minimal visibility for alphaTab's cursor elements, which ship unstyled.
+   Full branded cursor styling is a Phase 1 job (section 5.5 of the build
+   plan) — this is just enough to see it track during Phase 0. */
+.at-cursor-bar {
+  background: rgba(76, 109, 71, 0.12);
+}
+
+.at-cursor-beat {
+  background: var(--ma-green);
+  opacity: 0.85;
+}

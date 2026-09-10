@@ -1,0 +1,288 @@
+/* ============================================================
+   Matthew Annable — Design System
+   Version 1.0 · extracted from the guitar-lessons site
+   Fonts: Newsreader (display) + Manrope (UI/body), Google Fonts
+   ============================================================
+
+   Add to <head> before this file:
+
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+   ============================================================ */
+
+:root {
+  /* ---------- grounds (warm, never white-white) ---------- */
+  --ma-paper:        #FBF8F3;  /* default page ground */
+  --ma-paper-2:      #F4EFE7;  /* alternating section band, image wells */
+  --ma-card:         #FFFFFF;  /* cards only, never a page ground */
+  --ma-ink-ground:   #1C211A;  /* dark section / footer; near-black green */
+
+  /* ---------- ink ---------- */
+  --ma-ink:          #2E2A28;  /* headings and body */
+  --ma-ink-soft:     #6A625C;  /* secondary body, captions — 5.4:1 on paper */
+  --ma-ink-faint:    #A8A29A;  /* only on dark grounds, or non-text */
+  --ma-ink-on-dark:  #FBF8F3;
+
+  /* ---------- lines ---------- */
+  --ma-line:         #E3DCD1;  /* hairlines, card borders, dividers */
+  --ma-line-strong:  #C9BFB0;  /* form field borders */
+
+  /* ---------- brand ---------- */
+  --ma-green:        #4C6D47;  /* accent, links, eyebrows, selected state */
+  --ma-green-soft:   #F4EFE7;  /* green-adjacent tint = paper-2 */
+  --ma-green-line:   #A8C2A3;  /* underlines, hover borders */
+  --ma-amber:        #F7A630;  /* THE action colour — buttons, stars */
+  --ma-amber-hover:  #FFB544;
+  --ma-plum:         #6F4B52;  /* link hover, rare editorial accent */
+
+  /* ---------- semantic ---------- */
+  --ma-ok:           #4C6D47;
+  --ma-ok-soft:      #E8EFE6;
+  --ma-warn:         #8A5A14;
+  --ma-warn-soft:    #FDF0DC;
+  --ma-danger:       #9B3232;
+  --ma-danger-soft:  #FAEAEA;
+
+  /* ---------- type ---------- */
+  --ma-font-display: Newsreader, Georgia, "Times New Roman", serif;
+  --ma-font-ui:      Manrope, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --ma-font-mono:    ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* fluid scale — swap cqi for vw if you are not using container queries */
+  --ma-size-h1:      clamp(34px, 8.4cqi, 60px);
+  --ma-size-h2:      clamp(28px, 5.6cqi, 40px);
+  --ma-size-h3:      clamp(21px, 2.8cqi, 26px);
+  --ma-size-lead:    clamp(17px, 2.1cqi, 19px);
+  --ma-size-body:    17px;
+  --ma-size-small:   15px;
+  --ma-size-fine:    14px;
+  --ma-size-eyebrow: 12px;
+
+  --ma-leading-display: 1.05;
+  --ma-leading-head:    1.2;
+  --ma-leading-body:    1.7;
+  --ma-tracking-display: -0.015em;
+  --ma-tracking-eyebrow: 0.16em;
+
+  /* ---------- geometry ---------- */
+  --ma-radius-photo: 24px;
+  --ma-radius-card:  16px;
+  --ma-radius-sm:    12px;
+  --ma-radius-pill:  999px;
+
+  --ma-measure:      54ch;   /* max line length for body copy */
+  --ma-container:    1080px;
+
+  --ma-tap:          44px;   /* minimum tap target — non-negotiable */
+  --ma-tap-primary:  56px;
+
+  --ma-section-y:    clamp(32px, 7cqi, 104px);
+  --ma-section-x:    clamp(20px, 4cqi, 40px);
+  --ma-card-pad:     clamp(22px, 2.8cqi, 30px);
+  --ma-gap:          clamp(18px, 2.2cqi, 24px);
+
+  --ma-shadow-amber: 0 12px 26px -16px rgba(247, 166, 48, 0.95);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ma-paper);
+  color: var(--ma-ink);
+  font-family: var(--ma-font-ui);
+  font-size: var(--ma-size-body);
+  line-height: var(--ma-leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--ma-green); text-decoration: none; }
+a:hover { color: var(--ma-plum); }
+
+/* Headings are ALWAYS the serif; body is ALWAYS the sans. Never mix. */
+h1, .ma-h1 {
+  font-family: var(--ma-font-display); font-weight: 400;
+  font-size: var(--ma-size-h1); line-height: var(--ma-leading-display);
+  letter-spacing: var(--ma-tracking-display);
+  margin: 0; text-wrap: pretty;
+}
+h2, .ma-h2 {
+  font-family: var(--ma-font-display); font-weight: 400;
+  font-size: var(--ma-size-h2); line-height: 1.1; margin: 0; text-wrap: pretty;
+}
+h3, .ma-h3 {
+  font-family: var(--ma-font-display); font-weight: 500;
+  font-size: var(--ma-size-h3); line-height: var(--ma-leading-head); margin: 0;
+}
+/* Italic serif on a single word inside a heading is the one flourish
+   this system allows. Use it once per page at most. */
+h1 em, h2 em, .ma-em { font-style: italic; color: var(--ma-green); }
+
+p { margin: 0; text-wrap: pretty; }
+
+.ma-lead    { font-size: var(--ma-size-lead); line-height: 1.65; color: var(--ma-ink-soft); max-width: var(--ma-measure); }
+.ma-body    { color: var(--ma-ink-soft); font-size: 16px; line-height: var(--ma-leading-body); }
+.ma-small   { font-size: var(--ma-size-small); line-height: 1.6; color: var(--ma-ink-soft); }
+.ma-fine    { font-size: var(--ma-size-fine); color: var(--ma-ink-soft); }
+.ma-eyebrow {
+  font-size: var(--ma-size-eyebrow); font-weight: 600;
+  letter-spacing: var(--ma-tracking-eyebrow); text-transform: uppercase;
+  color: var(--ma-green);
+}
+
+/* ============================================================
+   Layout
+   ============================================================ */
+
+.ma-section   { padding: var(--ma-section-y) var(--ma-section-x); }
+.ma-section--band { background: var(--ma-paper-2); }
+.ma-section--dark { background: var(--ma-ink-ground); color: var(--ma-ink-on-dark); }
+.ma-section--dark .ma-body,
+.ma-section--dark .ma-small,
+.ma-section--dark .ma-fine { color: var(--ma-ink-faint); }
+.ma-section--dark .ma-eyebrow { color: var(--ma-green-line); }
+
+.ma-container { max-width: var(--ma-container); margin: 0 auto; }
+.ma-stack     { display: flex; flex-direction: column; gap: clamp(20px, 3.4cqi, 40px); }
+
+/* Sibling groups get flex/grid + gap, never margins on children. */
+.ma-grid {
+  display: grid; gap: var(--ma-gap); align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+}
+.ma-row { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
+
+/* ============================================================
+   Cards
+   ============================================================ */
+
+.ma-card {
+  display: flex; flex-direction: column; gap: 14px;
+  background: var(--ma-card);
+  border: 1px solid var(--ma-line);
+  border-radius: var(--ma-radius-card);
+  padding: var(--ma-card-pad);
+}
+/* On a paper-2 band, cards are white. On white/paper, cards take the band
+   colour instead — two adjacent whites read as a rendering bug. */
+.ma-section--band .ma-card { background: var(--ma-card); }
+.ma-card--tint { background: var(--ma-paper-2); border-color: transparent; }
+
+.ma-quote {
+  font-family: var(--ma-font-display); font-weight: 400; font-style: italic;
+  font-size: clamp(21px, 3.2cqi, 30px); line-height: 1.35;
+  color: var(--ma-ink); max-width: 46ch;
+}
+.ma-quote-attrib { font-family: var(--ma-font-ui); font-style: normal; font-size: var(--ma-size-fine); font-weight: 600; color: var(--ma-ink-soft); }
+
+/* ============================================================
+   Buttons — amber is the single action, once per screen
+   ============================================================ */
+
+.ma-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--ma-tap-primary); padding: 16px 32px;
+  background: var(--ma-amber); color: var(--ma-ink);
+  border: none; border-radius: var(--ma-radius-pill);
+  font-family: var(--ma-font-ui); font-size: clamp(16px, 2cqi, 18px); font-weight: 700;
+  white-space: nowrap; cursor: pointer;
+  box-shadow: var(--ma-shadow-amber);
+  transition: background .14s ease;
+}
+.ma-btn:hover { background: var(--ma-amber-hover); color: var(--ma-ink); }
+.ma-btn--sm { min-height: var(--ma-tap); padding: 12px 20px; font-size: 15px; }
+
+/* Secondary action is a green text link with a green hairline under it —
+   never a second filled button, never an outlined amber ghost. */
+.ma-link-underlined {
+  display: inline-flex; align-items: center; min-height: var(--ma-tap);
+  font-size: var(--ma-size-small); font-weight: 600; color: var(--ma-green);
+  border-bottom: 1px solid var(--ma-green-line); padding-bottom: 1px;
+}
+.ma-btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--ma-tap); padding: 10px 18px;
+  background: transparent; color: var(--ma-green);
+  border: 1px solid var(--ma-line-strong); border-radius: var(--ma-radius-pill);
+  font-family: var(--ma-font-ui); font-size: var(--ma-size-small); font-weight: 600;
+  white-space: nowrap; cursor: pointer;
+  transition: border-color .14s ease;
+}
+.ma-btn-ghost:hover { border-color: var(--ma-green); }
+
+.ma-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: var(--ma-radius-pill);
+  background: var(--ma-paper-2); color: var(--ma-ink-soft);
+  font-size: 13px; font-weight: 600;
+}
+.ma-badge {
+  display: inline-block; padding: 3px 10px; border-radius: var(--ma-radius-pill);
+  background: var(--ma-amber); color: var(--ma-ink);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+/* ============================================================
+   Forms
+   ============================================================ */
+
+.ma-field { display: flex; flex-direction: column; gap: 6px; font-size: var(--ma-size-small); font-weight: 600; }
+.ma-field small { font-weight: 400; color: var(--ma-ink-soft); font-size: 13px; line-height: 1.6; }
+
+.ma-input {
+  min-height: 48px; padding: 12px 14px;
+  font-family: var(--ma-font-ui); font-size: var(--ma-size-body); color: var(--ma-ink);
+  background: var(--ma-card);
+  border: 1px solid var(--ma-line-strong); border-radius: var(--ma-radius-sm);
+}
+.ma-input:hover { border-color: var(--ma-green-line); }
+.ma-input:focus { outline: 2px solid var(--ma-green); outline-offset: -1px; border-color: var(--ma-green); }
+
+/* ============================================================
+   Disclosure — the "Read more ▾" pattern
+   Long copy stays whole; the page stays short. Summary rows are
+   tap targets, the chevron rotates, nothing else moves.
+   ============================================================ */
+
+.ma-details summary { list-style: none; cursor: pointer; }
+.ma-details summary::-webkit-details-marker { display: none; }
+.ma-summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--ma-tap);
+  font-size: var(--ma-size-small); font-weight: 600; color: var(--ma-green);
+}
+.ma-summary::after { content: "▾"; font-size: 13px; transition: transform .16s ease; }
+.ma-details[open] > summary .ma-summary::after { transform: rotate(180deg); }
+
+/* ============================================================
+   Photography
+   ============================================================ */
+
+.ma-photo {
+  display: block; width: 100%; object-fit: cover;
+  border-radius: var(--ma-radius-photo);
+  background: var(--ma-paper-2);
+}
+.ma-photo--hero { height: clamp(230px, 44cqi, 540px); }
+.ma-photo--inline { height: 150px; border-radius: var(--ma-radius-card); }
+
+.ma-stars { color: var(--ma-amber); letter-spacing: 0.08em; }
+.ma-rule  { height: 1px; background: var(--ma-line); border: 0; margin: 0; }
+.ma-vrule { width: 1px; height: 16px; background: var(--ma-line); }
+
+/* ============================================================
+   Notices
+   ============================================================ */
+
+.ma-notice { padding: 16px 18px; border-radius: var(--ma-radius-sm); font-size: var(--ma-size-small); line-height: 1.65; }
+.ma-notice--ok     { background: var(--ma-ok-soft);     color: var(--ma-ok); }
+.ma-notice--warn   { background: var(--ma-warn-soft);   color: var(--ma-warn); }
+.ma-notice--danger { background: var(--ma-danger-soft); color: var(--ma-danger); }
+
+@media (max-width: 640px) {
+  .ma-btn { width: 100%; font-size: 16px; padding: 15px 20px; }
+}
