@@ -16,7 +16,7 @@
   <body>
     <main id="app">
       <header class="app-header">
-        <h1>Play-Along</h1>
+        <span class="eyebrow">Play-Along</span>
       </header>
 
       <div id="drop-zone" class="drop-zone">
@@ -24,16 +24,77 @@
         <input id="file-input" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx" hidden />
       </div>
 
+      <section id="recent-songs" class="recent-songs" hidden>
+        <h2>Recent</h2>
+        <ul id="recent-songs-list" class="recent-songs-list"></ul>
+      </section>
+
       <div id="player" class="player" hidden>
-        <div class="transport">
-          <button id="play-button" class="btn-amber" type="button">Play</button>
-          <select id="track-select"></select>
+        <div class="song-meta">
+          <h1 id="song-title"></h1>
+          <p id="song-artist" class="song-artist"></p>
         </div>
+
+        <div class="transport card">
+          <div class="transport-row">
+            <button id="play-button" class="btn-amber" type="button">Play</button>
+
+            <div class="scrubber-row">
+              <span id="time-current" class="time">0:00</span>
+              <input id="scrubber" class="scrubber" type="range" min="0" max="1000" value="0" />
+              <span id="time-total" class="time">0:00</span>
+            </div>
+
+            <div class="bar-counter">Bar <span id="bar-current">1</span> / <span id="bar-total">1</span></div>
+          </div>
+
+          <div class="control-row">
+            <label class="control">
+              <span class="control-label">Speed</span>
+              <input id="speed-slider" type="range" min="50" max="120" step="5" value="100" />
+              <span id="speed-value" class="control-value">100%</span>
+            </label>
+
+            <label class="control control-checkbox">
+              <input id="loop-toggle" type="checkbox" />
+              <span>Loop bars</span>
+            </label>
+            <input id="loop-start" class="bar-input" type="number" min="1" value="1" aria-label="Loop start bar" />
+            <span class="control-sep">to</span>
+            <input id="loop-end" class="bar-input" type="number" min="1" value="1" aria-label="Loop end bar" />
+
+            <label class="control control-checkbox">
+              <input id="tab-only-toggle" type="checkbox" />
+              <span>Tab only</span>
+            </label>
+
+            <label class="control control-checkbox" id="guitar-toggle-row" hidden>
+              <input id="guitar-toggle" type="checkbox" checked />
+              <span>Guitar</span>
+            </label>
+
+            <select id="track-select" aria-label="Track"></select>
+
+            <button id="presentation-button" class="btn-ghost" type="button">Presentation</button>
+          </div>
+        </div>
+
         <div id="alphatab" class="alphatab-surface"></div>
       </div>
 
       <p id="status" class="status" role="status"></p>
     </main>
+
+    <div id="second-file-modal" class="modal-backdrop" hidden>
+      <div class="modal-card">
+        <p id="second-file-modal-text"></p>
+        <div class="modal-actions">
+          <button id="second-file-cancel" class="btn-text" type="button">Cancel</button>
+          <button id="second-file-replace" class="btn-green-outline" type="button">Replace recording</button>
+          <button id="second-file-no-guitar" class="btn-amber" type="button">Use as no-guitar version</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

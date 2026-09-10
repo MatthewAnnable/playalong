@@ -1,14 +1,21 @@
-/* Phase 0 shell only — full branded player chrome is built in Phase 1. */
-
 #app {
   max-width: var(--ma-container);
   margin: 0 auto;
   padding: var(--ma-section-y) var(--ma-section-x);
 }
 
-.app-header h1 {
-  margin: 0 0 var(--ma-gap);
+.eyebrow {
+  display: block;
+  font-family: var(--ma-font-ui);
+  font-size: var(--ma-size-eyebrow);
+  font-weight: 600;
+  letter-spacing: var(--ma-tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--ma-green);
+  margin-bottom: var(--ma-gap);
 }
+
+/* Drop zone */
 
 .drop-zone {
   border: 1px dashed var(--ma-line-strong);
@@ -17,6 +24,10 @@
   text-align: center;
   color: var(--ma-ink-soft);
   cursor: pointer;
+  min-height: var(--ma-tap-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .drop-zone.is-dragover {
@@ -25,15 +36,96 @@
   background: var(--ma-paper-2);
 }
 
+.drop-zone code {
+  font-family: var(--ma-font-mono);
+  background: var(--ma-paper-2);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+}
+
+/* Recent songs */
+
+.recent-songs {
+  margin-top: var(--ma-gap);
+}
+
+.recent-songs h2 {
+  font-family: var(--ma-font-display);
+  font-weight: 500;
+  font-size: var(--ma-size-h3);
+  margin: 0 0 12px;
+}
+
+.recent-songs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recent-songs-list button {
+  font-family: var(--ma-font-ui);
+  font-size: var(--ma-size-small);
+  color: var(--ma-ink);
+  background: var(--ma-card);
+  border: 1px solid var(--ma-line);
+  border-radius: var(--ma-radius-sm);
+  padding: 10px 14px;
+  min-height: var(--ma-tap);
+  cursor: pointer;
+}
+
+.recent-songs-list button:hover {
+  border-color: var(--ma-green-line);
+}
+
+.recent-songs-list .recent-song-artist {
+  color: var(--ma-ink-soft);
+}
+
+/* Player shell */
+
 .player {
   margin-top: var(--ma-gap);
 }
 
+.song-meta {
+  margin-bottom: var(--ma-gap);
+}
+
+.song-meta h1 {
+  margin: 0;
+  font-size: var(--ma-size-h2);
+}
+
+.song-artist {
+  margin: 4px 0 0;
+  color: var(--ma-ink-soft);
+}
+
+.card {
+  background: var(--ma-card);
+  border: 1px solid var(--ma-line);
+  border-radius: var(--ma-radius-card);
+  padding: var(--ma-card-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Transport */
+
 .transport {
+  margin-bottom: var(--ma-gap);
+}
+
+.transport-row {
   display: flex;
   align-items: center;
   gap: var(--ma-gap);
-  margin-bottom: var(--ma-gap);
+  flex-wrap: wrap;
 }
 
 .btn-amber {
@@ -48,10 +140,139 @@
   color: var(--ma-ink);
   box-shadow: var(--ma-shadow-amber);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .btn-amber:hover {
   background: var(--ma-amber-hover);
+}
+
+.btn-ghost {
+  font-family: var(--ma-font-ui);
+  font-weight: 600;
+  font-size: var(--ma-size-small);
+  min-height: var(--ma-tap);
+  padding: 0 18px;
+  border: 1px solid var(--ma-line-strong);
+  border-radius: var(--ma-radius-pill);
+  background: transparent;
+  color: var(--ma-green);
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  border-color: var(--ma-green-line);
+}
+
+.btn-text {
+  font-family: var(--ma-font-ui);
+  font-weight: 600;
+  font-size: var(--ma-size-small);
+  color: var(--ma-ink-soft);
+  background: none;
+  border: none;
+  min-height: var(--ma-tap);
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.btn-green-outline {
+  font-family: var(--ma-font-ui);
+  font-weight: 600;
+  font-size: var(--ma-size-small);
+  min-height: var(--ma-tap);
+  padding: 0 18px;
+  border: 1px solid var(--ma-green-line);
+  border-radius: var(--ma-radius-pill);
+  background: transparent;
+  color: var(--ma-green);
+  cursor: pointer;
+}
+
+.scrubber-row {
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+}
+
+.time {
+  font-family: var(--ma-font-mono);
+  font-size: var(--ma-size-fine);
+  color: var(--ma-ink-soft);
+  min-width: 3.2em;
+  text-align: center;
+}
+
+.scrubber {
+  flex: 1;
+  accent-color: var(--ma-green);
+  height: var(--ma-tap);
+}
+
+.bar-counter {
+  font-family: var(--ma-font-ui);
+  font-size: var(--ma-size-small);
+  color: var(--ma-ink-soft);
+  white-space: nowrap;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid var(--ma-line);
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--ma-font-ui);
+  font-size: var(--ma-size-small);
+  color: var(--ma-ink-soft);
+}
+
+.control-label {
+  white-space: nowrap;
+}
+
+.control-value {
+  font-family: var(--ma-font-mono);
+  min-width: 3.5em;
+}
+
+.control input[type='range'] {
+  accent-color: var(--ma-green);
+}
+
+.control-checkbox {
+  cursor: pointer;
+}
+
+.control-checkbox input {
+  accent-color: var(--ma-green);
+  width: 18px;
+  height: 18px;
+}
+
+.bar-input {
+  width: 4.5em;
+  min-height: var(--ma-tap);
+  border-radius: var(--ma-radius-sm);
+  border: 1px solid var(--ma-line-strong);
+  background: var(--ma-paper);
+  padding: 0 8px;
+  font-family: var(--ma-font-mono);
+  color: var(--ma-ink);
+}
+
+.control-sep {
+  color: var(--ma-ink-faint);
+  font-size: var(--ma-size-fine);
 }
 
 #track-select {
@@ -64,12 +285,27 @@
   color: var(--ma-ink);
 }
 
+/* Score surface */
+
 .alphatab-surface {
   background: var(--ma-paper);
   border: 1px solid var(--ma-line);
   border-radius: var(--ma-radius-card);
   padding: var(--ma-card-pad);
   overflow-x: auto;
+}
+
+.at-cursor-bar {
+  background: rgba(76, 109, 71, 0.12);
+}
+
+.at-cursor-beat {
+  background: var(--ma-green);
+  opacity: 0.85;
+}
+
+.at-highlight {
+  fill: var(--ma-green) !important;
 }
 
 .status {
@@ -82,14 +318,87 @@
   color: var(--ma-danger);
 }
 
-/* Minimal visibility for alphaTab's cursor elements, which ship unstyled.
-   Full branded cursor styling is a Phase 1 job (section 5.5 of the build
-   plan) — this is just enough to see it track during Phase 0. */
-.at-cursor-bar {
-  background: rgba(76, 109, 71, 0.12);
+/* Second-file modal */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 33, 26, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: var(--ma-section-x);
 }
 
-.at-cursor-beat {
-  background: var(--ma-green);
-  opacity: 0.85;
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal-card {
+  background: var(--ma-card);
+  border-radius: var(--ma-radius-card);
+  padding: var(--ma-card-pad);
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.modal-card p {
+  margin: 0;
+  color: var(--ma-ink);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Presentation mode */
+
+#app.presentation .app-header,
+#app.presentation .drop-zone,
+#app.presentation .recent-songs,
+#app.presentation .song-meta,
+#app.presentation .control-row,
+#app.presentation .status {
+  display: none;
+}
+
+#app.presentation {
+  max-width: none;
+  padding: 0;
+  background: var(--ma-ink-ground);
+  min-height: 100vh;
+}
+
+#app.presentation .player {
+  margin: 0;
+}
+
+#app.presentation .transport {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: rgba(28, 33, 26, 0.85);
+  border: none;
+  border-radius: 0;
+  transition: opacity 0.3s ease;
+}
+
+#app.presentation.chrome-hidden .transport {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#app.presentation .alphatab-surface {
+  border: none;
+  border-radius: 0;
+  background: var(--ma-ink-ground);
+  min-height: 100vh;
 }
