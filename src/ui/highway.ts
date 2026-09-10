@@ -1,5 +1,5 @@
 import { getCurrentTempo, getExtrapolatedTick, getScoreMeta, getTicksPerQuarter, onStateChange } from '../engine/alphatab';
-import { HighwayView } from '../views/highway-view';
+import { HighwayView, MIN_NOTE_WIDTH_PX } from '../views/highway-view';
 import { applyTheme, type Theme } from '../theme/theme';
 import defaultTheme from '../theme/themes/default.json';
 
@@ -24,7 +24,13 @@ let showingHighway = false;
 function computePxPerTick(): number {
   const lookAheadWidth = canvas.getBoundingClientRect().width * (1 - 0.22);
   const ticksForLookahead = getTicksPerQuarter() * ASSUMED_QUARTERS_PER_BAR * LOOKAHEAD_BARS;
-  return ticksForLookahead > 0 ? lookAheadWidth / ticksForLookahead : 0.1;
+  const lookaheadBased = ticksForLookahead > 0 ? lookAheadWidth / ticksForLookahead : 0.1;
+  // Two bars of look-ahead on a narrow stage squeezes 16th notes closer
+  // together than a readable pill, so they'd overlap. Readability wins:
+  // show less of the bar ahead rather than a pile of unreadable pills.
+  const sixteenthTicks = getTicksPerQuarter() / 4;
+  const readabilityFloor = sixteenthTicks > 0 ? MIN_NOTE_WIDTH_PX / sixteenthTicks : lookaheadBased;
+  return Math.max(lookaheadBased, readabilityFloor);
 }
 
 function ensureView(): HighwayView {
@@ -49,6 +55,7 @@ function setHighwayVisible(visible: boolean): void {
   if (visible) {
     const v = ensureView();
     v.resize();
+    v.setPxPerTick(computePxPerTick());
     v.start();
   } else {
     view?.stop();
@@ -74,7 +81,9 @@ export function initHighway(): void {
   viewToggleButton.addEventListener('click', () => setHighwayVisible(!showingHighway));
 
   window.addEventListener('resize', () => {
-    if (showingHighway) view?.resize();
+    if (!showingHighway || !view) return;
+    view.resize();
+    view.setPxPerTick(computePxPerTick());
   });
 
   window.addEventListener('keydown', (e) => {

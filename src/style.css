@@ -133,6 +133,9 @@
   font-weight: 700;
   font-size: var(--ma-size-body);
   min-height: var(--ma-tap-primary);
+  /* Fixed width so the button doesn't jump under the cursor as the label
+     changes between Play / Pause / Counting in… */
+  min-width: 148px;
   padding: 0 28px;
   border: none;
   border-radius: var(--ma-radius-pill);

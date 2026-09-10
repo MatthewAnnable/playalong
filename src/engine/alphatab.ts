@@ -8,6 +8,7 @@ import * as clock from './clock';
 export interface EngineState {
   ready: boolean;
   isPlaying: boolean;
+  countingIn: boolean;
   currentTimeSec: number;
   durationSec: number;
   currentBar: number;
@@ -36,9 +37,12 @@ let positionLoopId = 0;
 let score: model.Score | null = null;
 let ticksPerQuarter = 960;
 
+let countInToken = 0;
+
 const state: EngineState = {
   ready: false,
   isPlaying: false,
+  countingIn: false,
   currentTimeSec: 0,
   durationSec: 0,
   currentBar: 1,
@@ -214,9 +218,11 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
   mainObjectUrl = null;
   noGuitarObjectUrl = null;
 
+  countInToken++;
   Object.assign(state, {
     ready: false,
     isPlaying: false,
+    countingIn: false,
     currentTimeSec: 0,
     durationSec: 0,
     currentBar: 1,
@@ -308,16 +314,57 @@ export function getCurrentTempo(): number {
   return tempoAtBar(state.currentBar);
 }
 
+const INK = new model.Color(46, 42, 40);
+const INK_SOFT = new model.Color(106, 98, 92);
+const INK_ON_DARK = new model.Color(251, 248, 243);
+const LINE_ON_DARK = new model.Color(140, 134, 126);
+
+/**
+ * The score view goes onto the dark stage in presentation mode (build plan
+ * 5.5), but alphaTab draws its notation in near-black ink — so without
+ * recolouring it, presentation mode rendered black-on-black.
+ */
+export function setPresentationMode(on: boolean): void {
+  if (!api) return;
+  const resources = api.settings.display.resources;
+  resources.mainGlyphColor = on ? INK_ON_DARK : INK;
+  resources.secondaryGlyphColor = on ? LINE_ON_DARK : INK_SOFT;
+  resources.staffLineColor = on ? LINE_ON_DARK : INK_SOFT;
+  resources.barSeparatorColor = on ? LINE_ON_DARK : INK_SOFT;
+  resources.barNumberColor = on ? INK_ON_DARK : INK_SOFT;
+  resources.scoreInfoColor = on ? INK_ON_DARK : INK;
+  api.updateSettings();
+  api.render();
+}
+
 export async function togglePlay(): Promise<void> {
   if (!api) return;
+
+  // A second click during the count-in used to start another one, and the
+  // two would toggle playback against each other — which read as the
+  // button simply not working. Clicking during a count-in now cancels it.
+  if (state.countingIn) {
+    countInToken++;
+    state.countingIn = false;
+    notify();
+    return;
+  }
+
   if (state.isPlaying) {
     api.playPause();
     return;
   }
+
   const bar = findBarAtTick(api.player?.tickPosition ?? 0);
   const masterBar = score?.masterBars[bar - 1];
   if (masterBar) {
+    const token = ++countInToken;
+    state.countingIn = true;
+    notify();
     await playCountIn(masterBar.timeSignatureNumerator, tempoAtBar(bar));
+    if (token !== countInToken) return;
+    state.countingIn = false;
+    notify();
   }
   api.playPause();
 }

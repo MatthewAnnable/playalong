@@ -6,6 +6,7 @@ import {
   setTabOnly,
   setTrackIndex,
   setGuitarOn,
+  setPresentationMode,
   togglePlay,
 } from '../engine/alphatab';
 
@@ -40,7 +41,8 @@ function formatTime(seconds: number): string {
 
 export function initControls(): void {
   onStateChange((state) => {
-    playButton.textContent = state.isPlaying ? 'Pause' : 'Play';
+    if (state.countingIn) playButton.textContent = 'Counting in…';
+    else playButton.textContent = state.isPlaying ? 'Pause' : 'Play';
     playButton.disabled = !state.ready;
 
     if (!isScrubbing) {
@@ -130,7 +132,9 @@ export function initControls(): void {
 
   presentationButton.addEventListener('click', () => {
     appEl.classList.toggle('presentation');
-    if (appEl.classList.contains('presentation')) resetIdleTimer();
+    const on = appEl.classList.contains('presentation');
+    setPresentationMode(on);
+    if (on) resetIdleTimer();
     else appEl.classList.remove('chrome-hidden');
   });
   appEl.addEventListener('mousemove', () => {
@@ -139,6 +143,7 @@ export function initControls(): void {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && appEl.classList.contains('presentation')) {
       appEl.classList.remove('presentation', 'chrome-hidden');
+      setPresentationMode(false);
     }
   });
 }

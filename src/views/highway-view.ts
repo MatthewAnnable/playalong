@@ -13,6 +13,17 @@ export interface HighwayViewOptions {
 const PLAY_LINE_RATIO = 0.22;
 const HIT_FLASH_MS = 120;
 
+/**
+ * Pill sizing is deliberately capped rather than derived from lane height.
+ * Tying it to the lane made pills far wider than the musical spacing they
+ * sit in — a 16th note occupies ~14px at a 2-bar look-ahead, so a pill
+ * forced to 59px buried its neighbours.
+ */
+export const MAX_LANE_HEIGHT = 96;
+export const MAX_PILL_HEIGHT = 44;
+/** Shortest note we still want to render without overlapping its neighbour. */
+export const MIN_NOTE_WIDTH_PX = MAX_PILL_HEIGHT;
+
 function fingerColor(theme: Theme, finger: 0 | 1 | 2 | 3 | 4): string {
   if (finger === 0) return theme.fingers.open;
   return theme.fingers[String(finger) as '1' | '2' | '3' | '4'];
@@ -80,8 +91,23 @@ export class HighwayView {
     this.rafId = 0;
   }
 
+  setPxPerTick(pxPerTick: number): void {
+    this.pxPerTick = pxPerTick;
+  }
+
   private laneHeight(): number {
-    return this.canvas.getBoundingClientRect().height / this.laneCount;
+    return Math.min(this.canvas.getBoundingClientRect().height / this.laneCount, MAX_LANE_HEIGHT);
+  }
+
+  /** Lanes are centred when the stage is taller than the capped lane block. */
+  private laneTopOffset(): number {
+    const height = this.canvas.getBoundingClientRect().height;
+    return Math.max((height - this.laneHeight() * this.laneCount) / 2, 0);
+  }
+
+  private laneCenterY(laneIndex: number): number {
+    const laneH = this.laneHeight();
+    return this.laneTopOffset() + laneIndex * laneH + laneH / 2;
   }
 
   private playLineX(): number {
@@ -123,11 +149,12 @@ export class HighwayView {
   private drawLanes(width: number): void {
     const ctx = this.ctx;
     const laneH = this.laneHeight();
+    const top = this.laneTopOffset();
     ctx.strokeStyle = this.theme.lane;
     ctx.globalAlpha = 0.25;
     ctx.lineWidth = 1;
     for (let i = 0; i <= this.laneCount; i++) {
-      const y = Math.round(i * laneH) + 0.5;
+      const y = Math.round(top + i * laneH) + 0.5;
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(width, y);
@@ -182,10 +209,10 @@ export class HighwayView {
   private drawNotes(currentTick: number, width: number): void {
     const ctx = this.ctx;
     const laneH = this.laneHeight();
-    const minWidth = laneH * 0.7;
     const rightEdgeTick = currentTick + (width - this.playLineX()) / this.pxPerTick + 2000;
     const startIndex = this.firstVisibleIndex(currentTick - 2000);
 
+    const visible: { note: NoteEvent; x: number; w: number; centerY: number }[] = [];
     const chordGroups = new Map<number, NoteEvent[]>();
 
     for (let i = startIndex; i < this.notes.length; i++) {
@@ -193,14 +220,13 @@ export class HighwayView {
       if (note.startTick > rightEdgeTick) break;
 
       const x = this.xForTick(note.startTick, currentTick);
-      const w = Math.max((note.endTick - note.startTick) * this.pxPerTick, minWidth);
+      const w = Math.max((note.endTick - note.startTick) * this.pxPerTick, MIN_NOTE_WIDTH_PX);
       if (x + w < 0 || x > width) continue;
 
       const laneIndex = note.string - 1;
       if (laneIndex < 0 || laneIndex >= this.laneCount) continue;
-      const centerY = laneIndex * laneH + laneH / 2;
 
-      this.drawPill(note, x, w, centerY, laneH, currentTick);
+      visible.push({ note, x, w, centerY: this.laneCenterY(laneIndex) });
 
       if (note.isChord) {
         if (!chordGroups.has(note.startTick)) chordGroups.set(note.startTick, []);
@@ -208,28 +234,37 @@ export class HighwayView {
       }
     }
 
+    // Connectors first, so they sit behind the pills rather than over them.
     for (const group of chordGroups.values()) {
       if (group.length < 2) continue;
       const x = this.xForTick(group[0].startTick, currentTick);
-      const ys = group.map((n) => (n.string - 1) * laneH + laneH / 2);
+      const ys = group.map((n) => this.laneCenterY(n.string - 1));
       ctx.strokeStyle = this.theme.text;
-      ctx.globalAlpha = 0.4;
-      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.18;
+      ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x + 2, Math.min(...ys));
       ctx.lineTo(x + 2, Math.max(...ys));
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+
+    for (const item of visible) {
+      this.drawPill(item.note, item.x, item.w, item.centerY, laneH, currentTick);
+    }
   }
 
   private drawPill(note: NoteEvent, x: number, w: number, centerY: number, laneH: number, currentTick: number): void {
     const ctx = this.ctx;
     const theme = this.theme;
-    const h = laneH * 0.62;
+    const h = Math.min(laneH * 0.62, MAX_PILL_HEIGHT);
     const radius = Math.min(h / 2, 10);
     const color = fingerColor(theme, note.finger);
-    const isOpen = note.fret === 0;
+    const isDead = note.fret < 0 || note.techniques.dead === true;
+    // A dead note is unfretted, so it gets the outlined treatment too —
+    // filling it with the "open" cream made it a blank block.
+    const isHollow = note.fret === 0 || isDead;
+    const labelCenterX = x + Math.min(w, h * 1.6) / 2;
     const isHit = note.startTick <= currentTick && currentTick - note.startTick < 200;
 
     if (isHit) this.registerHit(note);
@@ -258,7 +293,7 @@ export class HighwayView {
       ctx.fillStyle = color;
       ctx.fill();
       ctx.restore();
-    } else if (isOpen) {
+    } else if (isHollow) {
       ctx.fillStyle = theme.stage.background;
       ctx.fill();
       ctx.strokeStyle = color;
@@ -279,20 +314,20 @@ export class HighwayView {
       ctx.restore();
     }
 
-    if (note.fret >= 0 && !note.techniques.harmonic) {
-      const label = note.techniques.dead ? '×' : String(note.fret);
-      ctx.fillStyle = isOpen ? color : inkColorFor(color);
+    if (!note.techniques.harmonic) {
+      const label = isDead ? '×' : String(note.fret);
+      ctx.fillStyle = isHollow ? color : inkColorFor(color);
       ctx.font = `700 ${Math.max(h * 0.55, 14)}px Manrope, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(label, x + Math.min(w, laneH) / 2, centerY);
+      ctx.fillText(label, labelCenterX, centerY);
     }
 
     if (note.fingerSource === 'guess' && note.finger > 0) {
       ctx.beginPath();
-      ctx.arc(x + Math.min(w, laneH) / 2, centerY, h * 0.32, 0, Math.PI * 2);
+      ctx.arc(labelCenterX, centerY, h * 0.38, 0, Math.PI * 2);
       ctx.strokeStyle = theme.stage.background;
-      ctx.globalAlpha = 0.5;
+      ctx.globalAlpha = 0.3;
       ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.globalAlpha = 1;
