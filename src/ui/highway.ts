@@ -1,4 +1,12 @@
-import { getCurrentTempo, getExtrapolatedTick, getScoreMeta, getTicksPerQuarter, onStateChange } from '../engine/alphatab';
+import {
+  cycleFingerOverride,
+  getCurrentTempo,
+  getExtrapolatedTick,
+  getScoreMeta,
+  getTicksPerQuarter,
+  onStateChange,
+} from '../engine/alphatab';
+import { registerAction } from './shortcuts';
 import { HighwayView, MIN_NOTE_WIDTH_PX } from '../views/highway-view';
 import { applyTheme, type Theme } from '../theme/theme';
 import defaultTheme from '../theme/themes/default.json';
@@ -47,7 +55,7 @@ function ensureView(): HighwayView {
   return view;
 }
 
-function setHighwayVisible(visible: boolean): void {
+export function setHighwayView(visible: boolean): void {
   showingHighway = visible;
   alphatabSurface.hidden = visible;
   highwaySurface.hidden = !visible;
@@ -78,7 +86,7 @@ export function initHighway(): void {
     }
   });
 
-  viewToggleButton.addEventListener('click', () => setHighwayVisible(!showingHighway));
+  viewToggleButton.addEventListener('click', () => setHighwayView(!showingHighway));
 
   window.addEventListener('resize', () => {
     if (!showingHighway || !view) return;
@@ -86,9 +94,17 @@ export function initHighway(): void {
     view.setPxPerTick(computePxPerTick());
   });
 
-  window.addEventListener('keydown', (e) => {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
-    if (e.key === 'h' || e.key === 'H') setHighwayVisible(true);
-    if (e.key === 's' || e.key === 'S') setHighwayVisible(false);
+  registerAction('viewHighway', () => setHighwayView(true));
+  registerAction('viewScore', () => setHighwayView(false));
+
+  // Clicking a note corrects its fingering — the "fix finger" click from
+  // build plan 5.4. The correction is remembered per song.
+  canvas.addEventListener('click', (e) => {
+    const note = view?.noteAt(e.clientX, e.clientY);
+    if (note) cycleFingerOverride(note);
   });
+}
+
+export function isHighwayVisible(): boolean {
+  return showingHighway;
 }

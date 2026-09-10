@@ -10,7 +10,7 @@ export interface NoteEvent {
   /** -1 for rests/dead notes. */
   fret: number;
   finger: 0 | 1 | 2 | 3 | 4;
-  fingerSource: 'gp' | 'guess';
+  fingerSource: 'gp' | 'guess' | 'override';
   techniques: {
     hammer?: boolean;
     pull?: boolean;

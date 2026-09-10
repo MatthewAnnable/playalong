@@ -45,6 +45,8 @@ export class HighwayView {
   private barMarkers: BarMarker[] = [];
   private rafId = 0;
   private hitNoteIds = new Map<number, number>();
+  /** Last frame's laid-out pills, so a click can be mapped back to a note. */
+  private lastLayout: { note: NoteEvent; x: number; w: number; centerY: number; h: number }[] = [];
 
   constructor(options: HighwayViewOptions) {
     this.canvas = options.canvas;
@@ -249,9 +251,25 @@ export class HighwayView {
       ctx.globalAlpha = 1;
     }
 
+    const pillHeight = Math.min(laneH * 0.62, MAX_PILL_HEIGHT);
+    this.lastLayout = visible.map((item) => ({ ...item, h: pillHeight }));
+
     for (const item of visible) {
       this.drawPill(item.note, item.x, item.w, item.centerY, laneH, currentTick);
     }
+  }
+
+  /** Maps a click in CSS pixels onto the note drawn there, if any. */
+  noteAt(clientX: number, clientY: number): NoteEvent | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    for (const item of this.lastLayout) {
+      if (x >= item.x && x <= item.x + item.w && Math.abs(y - item.centerY) <= item.h / 2) {
+        return item.note;
+      }
+    }
+    return null;
   }
 
   private drawPill(note: NoteEvent, x: number, w: number, centerY: number, laneH: number, currentTick: number): void {

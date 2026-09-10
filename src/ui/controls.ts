@@ -1,4 +1,5 @@
 import {
+  nudgeBar,
   onStateChange,
   seekToSeconds,
   setLoop,
@@ -8,7 +9,9 @@ import {
   setGuitarOn,
   setPresentationMode,
   togglePlay,
+  type EngineState,
 } from '../engine/alphatab';
+import { registerAction } from './shortcuts';
 
 const playButton = document.querySelector<HTMLButtonElement>('#play-button')!;
 const scrubber = document.querySelector<HTMLInputElement>('#scrubber')!;
@@ -28,6 +31,7 @@ const trackSelect = document.querySelector<HTMLSelectElement>('#track-select')!;
 const presentationButton = document.querySelector<HTMLButtonElement>('#presentation-button')!;
 const appEl = document.querySelector<HTMLElement>('#app')!;
 
+let currentState: Readonly<EngineState>;
 let isScrubbing = false;
 let durationSec = 0;
 const SCRUBBER_RESOLUTION = 1000;
@@ -41,6 +45,7 @@ function formatTime(seconds: number): string {
 
 export function initControls(): void {
   onStateChange((state) => {
+    currentState = state;
     if (state.countingIn) playButton.textContent = 'Counting in…';
     else playButton.textContent = state.isPlaying ? 'Pause' : 'Play';
     playButton.disabled = !state.ready;
@@ -130,20 +135,37 @@ export function initControls(): void {
     }, 2000);
   }
 
-  presentationButton.addEventListener('click', () => {
-    appEl.classList.toggle('presentation');
-    const on = appEl.classList.contains('presentation');
+  function togglePresentation(force?: boolean): void {
+    const on = force ?? !appEl.classList.contains('presentation');
+    appEl.classList.toggle('presentation', on);
     setPresentationMode(on);
     if (on) resetIdleTimer();
     else appEl.classList.remove('chrome-hidden');
-  });
+  }
+
+  presentationButton.addEventListener('click', () => togglePresentation());
   appEl.addEventListener('mousemove', () => {
     if (appEl.classList.contains('presentation')) resetIdleTimer();
   });
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && appEl.classList.contains('presentation')) {
-      appEl.classList.remove('presentation', 'chrome-hidden');
-      setPresentationMode(false);
-    }
+    if (e.key === 'Escape' && appEl.classList.contains('presentation')) togglePresentation(false);
+  });
+
+  registerAction('playPause', () => void togglePlay());
+  registerAction('barBack', () => nudgeBar(-1));
+  registerAction('barForward', () => nudgeBar(1));
+  registerAction('loopStart', () => setLoop(currentState.currentBar, currentState.loopEndBar, true));
+  registerAction('loopEnd', () => setLoop(currentState.loopStartBar, currentState.currentBar, true));
+  registerAction('loopToggle', () =>
+    setLoop(currentState.loopStartBar, currentState.loopEndBar, !currentState.loopEnabled),
+  );
+  registerAction('speedDown', () => setSpeed(Math.max(currentState.speed - 5, 50)));
+  registerAction('speedUp', () => setSpeed(Math.min(currentState.speed + 5, 120)));
+  registerAction('speedReset', () => setSpeed(100));
+  registerAction('guitarToggle', () => setGuitarOn(!currentState.guitarOn));
+  registerAction('presentationToggle', () => togglePresentation());
+  registerAction('nextTrack', () => {
+    if (currentState.trackNames.length === 0) return;
+    setTrackIndex((currentState.trackIndex + 1) % currentState.trackNames.length);
   });
 }

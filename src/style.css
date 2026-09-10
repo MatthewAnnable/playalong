@@ -420,6 +420,112 @@
   flex-wrap: wrap;
 }
 
+/* Shortcuts panel */
+
+.modal-card-wide {
+  max-width: 560px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-family: var(--ma-font-display);
+  font-weight: 500;
+  font-size: var(--ma-size-h3);
+  margin: 0;
+}
+
+.modal-note {
+  color: var(--ma-ink-soft);
+  font-size: var(--ma-size-small);
+  margin: 0;
+}
+
+.shortcuts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ma-line);
+  font-size: var(--ma-size-small);
+}
+
+.shortcut-key {
+  font-family: var(--ma-font-mono);
+  font-size: var(--ma-size-fine);
+  color: var(--ma-ink-soft);
+  background: var(--ma-paper-2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  min-width: 5em;
+  text-align: center;
+}
+
+.shortcut-row.is-learning .shortcut-key {
+  background: var(--ma-amber);
+  color: var(--ma-ink);
+}
+
+.shortcut-set {
+  font-family: var(--ma-font-ui);
+  font-weight: 600;
+  font-size: var(--ma-size-fine);
+  color: var(--ma-green);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--ma-green-line);
+  padding: 2px 0;
+  min-height: var(--ma-tap);
+  cursor: pointer;
+}
+
+.pending-note {
+  margin: 8px 0 0;
+  color: var(--ma-green);
+  font-weight: 600;
+}
+
+/* Tap-to-start overlay for links that open with autoplay */
+
+.tap-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 33, 26, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.tap-overlay[hidden] {
+  display: none;
+}
+
+.tap-card {
+  background: var(--ma-card);
+  border-radius: var(--ma-radius-card);
+  padding: var(--ma-card-pad);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tap-card p {
+  margin: 0;
+  color: var(--ma-ink-soft);
+}
+
 /* Presentation mode */
 
 #app.presentation .app-header,

@@ -1,9 +1,27 @@
 import './style.css';
 import { isGuitarProFile, readFileAsArrayBuffer } from './engine/loader';
-import { getScoreMeta, hasMainAudio, openScore, replaceMainAudio, setNoGuitarTrack } from './engine/alphatab';
+import {
+  getScoreMeta,
+  getSongSlug,
+  hasMainAudio,
+  onStateChange,
+  openScore,
+  replaceMainAudio,
+  setGuitarOn,
+  setLoop,
+  setNoGuitarTrack,
+  setSpeed,
+  setTrackIndex,
+  togglePlay,
+  type EngineState,
+} from './engine/alphatab';
+import { slugify } from './engine/slug';
 import { initControls } from './ui/controls';
-import { initHighway } from './ui/highway';
+import { initHighway, isHighwayVisible, setHighwayView } from './ui/highway';
 import { listRecentSongs, saveRecentSong, type RecentSong } from './ui/library';
+import { buildPracticeLink, readLinkParams, type LinkParams } from './ui/links';
+import { initShortcuts, registerAction } from './ui/shortcuts';
+import { initShortcutsPanel } from './ui/shortcuts-panel';
 
 const dropZone = document.querySelector<HTMLDivElement>('#drop-zone')!;
 const fileInput = document.querySelector<HTMLInputElement>('#file-input')!;
@@ -20,8 +38,16 @@ const modalReplace = document.querySelector<HTMLButtonElement>('#second-file-rep
 const modalNoGuitar = document.querySelector<HTMLButtonElement>('#second-file-no-guitar')!;
 const modalCancel = document.querySelector<HTMLButtonElement>('#second-file-cancel')!;
 
+const pendingSongNote = document.querySelector<HTMLParagraphElement>('#pending-song-note')!;
+const copyLinkButton = document.querySelector<HTMLButtonElement>('#copy-link-button')!;
+const tapOverlay = document.querySelector<HTMLDivElement>('#tap-to-start')!;
+const tapButton = document.querySelector<HTMLButtonElement>('#tap-to-start-button')!;
+
 let hasSongLoaded = false;
 let pendingAudioFile: File | null = null;
+let linkParams: LinkParams = {};
+let pendingLinkParams: LinkParams | null = null;
+let latestState: Readonly<EngineState> | null = null;
 
 function setStatus(message: string, isError = false): void {
   statusEl.textContent = message;
@@ -42,7 +68,14 @@ async function loadSong(file: File): Promise<void> {
     const meta = getScoreMeta();
     songTitleEl.textContent = meta.title || file.name.replace(/\.[^.]+$/, '');
     songArtistEl.textContent = meta.artist;
-    setStatus(`Loaded "${file.name}".`);
+    if (pendingLinkParams && matchesPendingSong(file.name)) {
+      const params = pendingLinkParams;
+      clearPendingSongPrompt();
+      applyLinkParams(params);
+      setStatus(`Loaded "${file.name}" — practice link applied.`);
+    } else {
+      setStatus(`Loaded "${file.name}".`);
+    }
     await saveRecentSong({
       id: file.name,
       filename: file.name,
@@ -165,6 +198,85 @@ playerEl.addEventListener('drop', (e) => {
   if (file) void handleFile(file);
 });
 
+/**
+ * Applies the settings carried by a practice link once the song is open.
+ * Bars are clamped, so a link pointing past the end of a shorter song
+ * degrades gracefully instead of breaking the loop.
+ */
+function applyLinkParams(params: LinkParams): void {
+  const totalBars = latestState?.totalBars ?? 1;
+  if (params.track !== undefined) setTrackIndex(params.track);
+  if (params.speed !== undefined) setSpeed(Math.round(params.speed * 100));
+  if (params.from !== undefined || params.to !== undefined) {
+    const from = Math.min(Math.max(params.from ?? 1, 1), totalBars);
+    const to = Math.min(Math.max(params.to ?? totalBars, 1), totalBars);
+    setLoop(from, to, true);
+  }
+  if (params.view === 'highway') setHighwayView(true);
+  if (params.guitar === 'off') setGuitarOn(false);
+  if (params.autoplay) void togglePlay();
+}
+
+function showPendingSongPrompt(params: LinkParams): void {
+  pendingLinkParams = params;
+  const name = params.song ? params.song.replace(/-/g, ' ') : 'the song';
+  pendingSongNote.textContent = `Drop “${name}” here to continue`;
+  pendingSongNote.hidden = false;
+}
+
+function clearPendingSongPrompt(): void {
+  pendingLinkParams = null;
+  pendingSongNote.hidden = true;
+}
+
+/** A dropped file satisfies a pending link if its title or filename matches. */
+function matchesPendingSong(filename: string): boolean {
+  const wanted = pendingLinkParams?.song;
+  if (!wanted) return false;
+  const titleSlug = slugify(getScoreMeta().title || '');
+  const fileSlug = slugify(filename.replace(/\.[^.]+$/, ''));
+  return titleSlug === wanted || fileSlug === wanted;
+}
+
+function copyPracticeLink(): void {
+  if (!latestState || !hasSongLoaded) {
+    setStatus('Open a song first, then copy a practice link.', true);
+    return;
+  }
+  const link = buildPracticeLink({
+    songSlug: getSongSlug(),
+    trackIndex: latestState.trackIndex,
+    loopEnabled: latestState.loopEnabled,
+    loopStartBar: latestState.loopStartBar,
+    loopEndBar: latestState.loopEndBar,
+    speed: latestState.speed,
+    view: isHighwayVisible() ? 'highway' : 'score',
+    guitarOn: latestState.guitarOn,
+    hasNoGuitarTrack: latestState.hasNoGuitarTrack,
+  });
+  navigator.clipboard.writeText(link).then(
+    () => setStatus('Practice link copied — paste it into a lesson email.'),
+    () => setStatus(link),
+  );
+}
+
+onStateChange((state) => {
+  latestState = state;
+  tapOverlay.hidden = !state.audioBlocked;
+});
+
+copyLinkButton.addEventListener('click', copyPracticeLink);
+tapButton.addEventListener('click', () => {
+  tapOverlay.hidden = true;
+  void togglePlay();
+});
+
+initShortcuts();
+initShortcutsPanel();
+registerAction('copyLink', copyPracticeLink);
 initControls();
 initHighway();
+
+linkParams = readLinkParams();
+if (linkParams.song) showPendingSongPrompt(linkParams);
 void renderRecentSongs();

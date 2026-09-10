@@ -3,12 +3,15 @@ import { model, synth } from '@coderline/alphatab';
 import { playCountIn } from './countIn';
 import { extractBarMarkers, extractNotes, type BarMarker, type NoteEvent } from './notes';
 import { applyFingeringHeuristic } from './fingering';
+import { applyOverrides, loadOverrides, overrideKey, setOverride } from './overrides';
+import { slugify } from './slug';
 import * as clock from './clock';
 
 export interface EngineState {
   ready: boolean;
   isPlaying: boolean;
   countingIn: boolean;
+  audioBlocked: boolean;
   currentTimeSec: number;
   durationSec: number;
   currentBar: number;
@@ -43,6 +46,7 @@ const state: EngineState = {
   ready: false,
   isPlaying: false,
   countingIn: false,
+  audioBlocked: false,
   currentTimeSec: 0,
   durationSec: 0,
   currentBar: 1,
@@ -97,7 +101,21 @@ function makeExternalMediaHandler(el: HTMLAudioElement): synth.IExternalMediaHan
       if (noGuitarAudio) noGuitarAudio.currentTime = time / 1000;
     },
     play(): void {
-      void el.play();
+      // Safari (and iOS especially) refuses playback that didn't come from a
+      // user gesture. Surface that so an autoplay link can show a "tap to
+      // start" overlay instead of silently doing nothing (build plan §9).
+      el.play().then(
+        () => {
+          if (state.audioBlocked) {
+            state.audioBlocked = false;
+            notify();
+          }
+        },
+        () => {
+          state.audioBlocked = true;
+          notify();
+        },
+      );
       if (noGuitarAudio) void noGuitarAudio.play();
     },
     pause(): void {
@@ -195,7 +213,26 @@ function loadNotesForTrack(loadedScore: model.Score, index: number): void {
   const track = loadedScore.tracks[index];
   const events = extractNotes(track);
   applyFingeringHeuristic(events);
+  applyOverrides(events, loadOverrides(getSongSlug()));
   state.noteEvents = events;
+}
+
+export function getSongSlug(): string {
+  return score?.title ? slugify(score.title) : '';
+}
+
+/**
+ * Cycles one note's finger and remembers the correction for this song, so
+ * Matthew can fix a wrong guess without opening Guitar Pro (build plan 5.4).
+ */
+export function cycleFingerOverride(event: NoteEvent): void {
+  const next = ((event.finger + 1) % 5) as 0 | 1 | 2 | 3 | 4;
+  const slug = getSongSlug();
+  if (!slug) return;
+  setOverride(slug, overrideKey(event), next);
+  event.finger = next;
+  event.fingerSource = 'override';
+  notify();
 }
 
 function populateTrackSelect(loadedScore: model.Score): void {
@@ -223,6 +260,7 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
     ready: false,
     isPlaying: false,
     countingIn: false,
+    audioBlocked: false,
     currentTimeSec: 0,
     durationSec: 0,
     currentBar: 1,
@@ -367,6 +405,17 @@ export async function togglePlay(): Promise<void> {
     notify();
   }
   api.playPause();
+}
+
+export function seekToBar(bar: number): void {
+  if (!api || !score) return;
+  const clamped = Math.min(Math.max(bar, 1), score.masterBars.length);
+  api.tickPosition = barToTick(clamped);
+  updateFromPlayback();
+}
+
+export function nudgeBar(delta: number): void {
+  seekToBar(state.currentBar + delta);
 }
 
 export function seekToSeconds(seconds: number): void {

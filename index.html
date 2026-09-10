@@ -20,7 +20,10 @@
       </header>
 
       <div id="drop-zone" class="drop-zone">
-        <p>Drag a <code>.gp</code> file here, or click to choose one</p>
+        <div>
+          <p id="drop-zone-text">Drag a <code>.gp</code> file here, or click to choose one</p>
+          <p id="pending-song-note" class="pending-note" hidden></p>
+        </div>
         <input id="file-input" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx" hidden />
       </div>
 
@@ -77,6 +80,8 @@
 
             <button id="view-toggle-button" class="btn-ghost" type="button">Highway view</button>
             <button id="presentation-button" class="btn-ghost" type="button">Presentation</button>
+            <button id="copy-link-button" class="btn-ghost" type="button">Copy practice link</button>
+            <button id="shortcuts-button" class="btn-ghost" type="button">Shortcuts</button>
           </div>
         </div>
 
@@ -109,6 +114,31 @@
           <button id="second-file-replace" class="btn-green-outline" type="button">Replace recording</button>
           <button id="second-file-no-guitar" class="btn-amber" type="button">Use as no-guitar version</button>
         </div>
+      </div>
+    </div>
+
+    <div id="shortcuts-modal" class="modal-backdrop" hidden>
+      <div class="modal-card modal-card-wide">
+        <h2 class="modal-title">Keyboard and pedals</h2>
+        <p class="modal-note">
+          Press <strong>Set</strong>, then press the key or footswitch you want for that action. Whatever your
+          pedals already send will work — there's no need to reprogram them.
+        </p>
+        <ul id="shortcuts-list" class="shortcuts-list"></ul>
+        <div class="modal-actions">
+          <button id="shortcuts-reset" class="btn-text" type="button">Reset to defaults</button>
+          <button id="shortcuts-import" class="btn-green-outline" type="button">Import</button>
+          <button id="shortcuts-export" class="btn-green-outline" type="button">Export</button>
+          <button id="shortcuts-close" class="btn-amber" type="button">Done</button>
+        </div>
+        <input id="shortcuts-import-file" type="file" accept="application/json,.json" hidden />
+      </div>
+    </div>
+
+    <div id="tap-to-start" class="tap-overlay" hidden>
+      <div class="tap-card">
+        <p>Your browser blocked playback until you tap.</p>
+        <button id="tap-to-start-button" class="btn-amber" type="button">Tap to start</button>
       </div>
     </div>
 
