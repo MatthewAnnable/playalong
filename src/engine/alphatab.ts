@@ -1,6 +1,9 @@
 import { AlphaTabApi, PlayerMode, Settings, StaveProfile } from '@coderline/alphatab';
 import { model, synth } from '@coderline/alphatab';
 import { playCountIn } from './countIn';
+import { extractBarMarkers, extractNotes, type BarMarker, type NoteEvent } from './notes';
+import { applyFingeringHeuristic } from './fingering';
+import * as clock from './clock';
 
 export interface EngineState {
   ready: boolean;
@@ -18,6 +21,8 @@ export interface EngineState {
   hasNoGuitarTrack: boolean;
   trackNames: string[];
   trackIndex: number;
+  noteEvents: NoteEvent[];
+  barMarkers: BarMarker[];
 }
 
 const CROSSFADE_MS = 80;
@@ -29,6 +34,7 @@ let mainObjectUrl: string | null = null;
 let noGuitarObjectUrl: string | null = null;
 let positionLoopId = 0;
 let score: model.Score | null = null;
+let ticksPerQuarter = 960;
 
 const state: EngineState = {
   ready: false,
@@ -46,6 +52,8 @@ const state: EngineState = {
   hasNoGuitarTrack: false,
   trackNames: [],
   trackIndex: 0,
+  noteEvents: [],
+  barMarkers: [],
 };
 
 const listeners = new Set<(state: Readonly<EngineState>) => void>();
@@ -129,12 +137,31 @@ function tempoAtBar(barNumber: number): number {
   return tempo;
 }
 
+function computeTicksPerQuarter(loadedScore: model.Score): number {
+  const bars = loadedScore.masterBars;
+  if (bars.length < 2) return 960;
+  const durationTicks = bars[1].start - bars[0].start;
+  const quarters = bars[0].timeSignatureNumerator * (4 / bars[0].timeSignatureDenominator);
+  return quarters > 0 ? durationTicks / quarters : 960;
+}
+
 function updateFromPlayback(): void {
   if (!api || !mainAudio) return;
+  const tick = api.player?.tickPosition ?? 0;
   state.currentTimeSec = mainAudio.currentTime;
   if (Number.isFinite(mainAudio.duration)) state.durationSec = mainAudio.duration;
-  state.currentBar = findBarAtTick(api.player?.tickPosition ?? 0);
+  state.currentBar = findBarAtTick(tick);
+  const ticksPerSecond = (tempoAtBar(state.currentBar) / 60) * ticksPerQuarter;
+  clock.recordSample(mainAudio.currentTime, tick, ticksPerSecond);
   notify();
+}
+
+export function getExtrapolatedTick(): number {
+  return clock.getExtrapolatedTick(mainAudio?.currentTime ?? 0);
+}
+
+export function getTicksPerQuarter(): number {
+  return ticksPerQuarter;
 }
 
 function applyGuitarVolumes(guitarOn: boolean, immediate: boolean): void {
@@ -160,9 +187,19 @@ function applyGuitarVolumes(guitarOn: boolean, immediate: boolean): void {
   }, stepMs);
 }
 
+function loadNotesForTrack(loadedScore: model.Score, index: number): void {
+  const track = loadedScore.tracks[index];
+  const events = extractNotes(track);
+  applyFingeringHeuristic(events);
+  state.noteEvents = events;
+}
+
 function populateTrackSelect(loadedScore: model.Score): void {
   state.trackNames = loadedScore.tracks.map((track, index) => track.name || `Track ${index + 1}`);
   state.trackIndex = 0;
+  ticksPerQuarter = computeTicksPerQuarter(loadedScore);
+  state.barMarkers = extractBarMarkers(loadedScore);
+  loadNotesForTrack(loadedScore, 0);
   notify();
 }
 
@@ -189,7 +226,10 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
     loopEndBar: 1,
     guitarOn: true,
     hasNoGuitarTrack: false,
+    noteEvents: [],
+    barMarkers: [],
   });
+  clock.reset();
   notify();
 
   const settings = new Settings();
@@ -264,6 +304,10 @@ export function getScoreMeta(): { title: string; artist: string } {
   return { title: score?.title ?? '', artist: score?.artist ?? '' };
 }
 
+export function getCurrentTempo(): number {
+  return tempoAtBar(state.currentBar);
+}
+
 export async function togglePlay(): Promise<void> {
   if (!api) return;
   if (state.isPlaying) {
@@ -322,6 +366,7 @@ export function setTrackIndex(index: number): void {
   if (!api?.score) return;
   state.trackIndex = index;
   api.renderTracks([api.score.tracks[index]]);
+  loadNotesForTrack(api.score, index);
   notify();
 }
 

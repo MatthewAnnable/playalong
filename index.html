@@ -75,11 +75,27 @@
 
             <select id="track-select" aria-label="Track"></select>
 
+            <button id="view-toggle-button" class="btn-ghost" type="button">Highway view</button>
             <button id="presentation-button" class="btn-ghost" type="button">Presentation</button>
           </div>
         </div>
 
         <div id="alphatab" class="alphatab-surface"></div>
+
+        <div id="highway" class="highway-surface" hidden>
+          <div class="highway-header">
+            <div>
+              <span class="highway-title" id="highway-song-title"></span>
+              <span class="highway-artist" id="highway-song-artist"></span>
+            </div>
+            <div class="highway-meta">
+              <span id="highway-bar-info">Bar 1 / 1</span>
+              <span id="highway-tempo"></span>
+              <span id="highway-track-name"></span>
+            </div>
+          </div>
+          <canvas id="highway-canvas"></canvas>
+        </div>
       </div>
 
       <p id="status" class="status" role="status"></p>

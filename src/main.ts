@@ -2,6 +2,7 @@ import './style.css';
 import { isGuitarProFile, readFileAsArrayBuffer } from './engine/loader';
 import { getScoreMeta, hasMainAudio, openScore, replaceMainAudio, setNoGuitarTrack } from './engine/alphatab';
 import { initControls } from './ui/controls';
+import { initHighway } from './ui/highway';
 import { listRecentSongs, saveRecentSong, type RecentSong } from './ui/library';
 
 const dropZone = document.querySelector<HTMLDivElement>('#drop-zone')!;
@@ -165,4 +166,5 @@ playerEl.addEventListener('drop', (e) => {
 });
 
 initControls();
+initHighway();
 void renderRecentSongs();

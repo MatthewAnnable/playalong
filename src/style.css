@@ -318,6 +318,66 @@
   color: var(--ma-danger);
 }
 
+/* Highway view */
+
+.highway-surface {
+  background: var(--stage-bg, var(--ma-ink-ground));
+  border-radius: var(--ma-radius-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.highway-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--ma-gap);
+  padding: 14px 18px;
+  color: var(--stage-text-color, var(--ma-ink-on-dark));
+  flex-wrap: wrap;
+}
+
+.highway-title {
+  font-family: var(--ma-font-display);
+  font-size: 20px;
+  margin-right: 10px;
+}
+
+.highway-artist {
+  font-family: var(--ma-font-ui);
+  font-size: var(--ma-size-small);
+  opacity: 0.7;
+}
+
+.highway-meta {
+  font-family: var(--ma-font-mono);
+  font-size: var(--ma-size-fine);
+  opacity: 0.8;
+  display: flex;
+  gap: 16px;
+}
+
+#highway-canvas {
+  display: block;
+  width: 100%;
+  height: 55vh;
+  min-height: 320px;
+  max-height: 640px;
+}
+
+#app.presentation .highway-header {
+  display: none;
+}
+
+#app.presentation .highway-surface {
+  border-radius: 0;
+}
+
+#app.presentation #highway-canvas {
+  height: 100vh;
+}
+
 /* Second-file modal */
 
 .modal-backdrop {
