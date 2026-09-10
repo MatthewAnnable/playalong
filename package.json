@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "add-song": "node scripts/add-song.mjs"
   },
   "dependencies": {
     "@coderline/alphatab": "1.8.4"

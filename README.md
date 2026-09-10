@@ -3,8 +3,49 @@
 A browser play-along for guitar lessons. Open a Guitar Pro file, and it plays
 the real recording in sync with the tab, on screen or on an iPad.
 
-This is v1, Phase 0: the basic skeleton. Drag a `.gp` file onto the page and
-it plays, in sync, with a track picker.
+Drag a `.gp` file onto the page and it plays, in sync, with a score view and
+a Yousician-style highway view.
+
+## Sharing a practice link
+
+Set up the loop, speed, track and view you want, then press **Copy practice
+link** and paste it into a lesson email. The link carries everything except
+the song itself — when a student opens it, the page asks them to drop their
+copy of the file, then jumps straight to the right bars and speed.
+
+## Keyboard and foot pedals
+
+Press **Shortcuts** to see the key for every action, and **Set** to change
+one. Whatever your pedals already send is fine — including combinations like
+Ctrl+Shift+M — so there's no need to reprogram them in elfkey. The map is
+saved in the browser, and **Export** writes it to a file you can import again
+after a browser reset.
+
+## Fixing a wrong fingering
+
+Where the Guitar Pro file doesn't say which finger to use, the app guesses,
+and marks guesses with a faint ring. If a guess is wrong, click the note in
+the highway view to cycle it. Corrections are remembered per song on that
+device.
+
+## Using it in OBS
+
+1. Open `/remote` in a normal browser tab — this is where you drop the song
+   and control playback, and where the sound comes from.
+2. In OBS, add a **Browser Source** pointing at the app with `?mode=obs` and
+   tick "Shutdown source when not visible" off.
+
+The OBS source shows only the lanes and notes on a transparent background,
+so it sits over your camera with no black box. It follows the remote tab, so
+you never need to click inside OBS. "Audio from OBS" swaps which side makes
+the sound.
+
+## The hosted library (off by default)
+
+The app is drag-and-drop only, and this repo contains no songs. To switch on
+a hosted library later, set `MANIFEST_URL` in `src/ui/manifest.ts` (or pass
+`?manifest=`) to a manifest like `songs/index.example.json`. Then
+`npm run add-song path/to/file.gp` copies a song in and adds its entry.
 
 ## Running it locally
 

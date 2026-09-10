@@ -186,6 +186,60 @@ export function getTicksPerQuarter(): number {
   return ticksPerQuarter;
 }
 
+/** Snapshot the follower page needs to reconstruct our position. */
+export function getPositionSnapshot(): {
+  tick: number;
+  ticksPerSecond: number;
+  playbackRate: number;
+  isPlaying: boolean;
+  audioSeconds: number;
+} {
+  return {
+    audioSeconds: mainAudio?.currentTime ?? 0,
+    tick: api?.player?.tickPosition ?? 0,
+    ticksPerSecond: (tempoAtBar(state.currentBar) / 60) * ticksPerQuarter,
+    playbackRate: mainAudio?.playbackRate ?? 1,
+    isPlaying: state.isPlaying,
+  };
+}
+
+/**
+ * The OBS browser source loads the same song but stays silent — audio comes
+ * from the remote tab so it runs through Matthew's normal routing.
+ */
+/**
+ * Follower-side playback for when the OBS source is the audio master: match
+ * the remote's play state and nudge back into line if we drift.
+ */
+export function setFollowerPlayback(isPlaying: boolean, audioSeconds: number): void {
+  if (!mainAudio) return;
+  if (Math.abs(mainAudio.currentTime - audioSeconds) > 0.15) {
+    mainAudio.currentTime = audioSeconds;
+    if (noGuitarAudio) noGuitarAudio.currentTime = audioSeconds;
+  }
+  if (isPlaying && mainAudio.paused) {
+    void mainAudio.play();
+    if (noGuitarAudio) void noGuitarAudio.play();
+  } else if (!isPlaying && !mainAudio.paused) {
+    mainAudio.pause();
+    if (noGuitarAudio) noGuitarAudio.pause();
+  }
+}
+
+/**
+ * In OBS mode the local engine never plays — position comes from the remote
+ * tab — so its polling loop is pure overhead and would fight the remote for
+ * ownership of the on-screen bar counter.
+ */
+export function stopLocalPositionLoop(): void {
+  stopPositionLoop();
+}
+
+export function setMuted(muted: boolean): void {
+  if (mainAudio) mainAudio.muted = muted;
+  if (noGuitarAudio) noGuitarAudio.muted = muted;
+}
+
 function applyGuitarVolumes(guitarOn: boolean, immediate: boolean): void {
   if (!mainAudio || !noGuitarAudio) return;
   const mainTarget = guitarOn ? 1 : 0;

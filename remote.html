@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Play-Along — Remote</title>
+    <script>
+      // The remote is the same app in "remote" mode: it owns the transport,
+      // the audio and the drag-and-drop, and drives the OBS browser source
+      // over BroadcastChannel. Redirecting keeps one copy of the markup.
+      const params = new URLSearchParams(location.search);
+      params.set('mode', 'remote');
+      location.replace('./?' + params.toString());
+    </script>
+  </head>
+  <body></body>
+</html>

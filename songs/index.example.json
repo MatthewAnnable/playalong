@@ -1,0 +1,15 @@
+{
+  "songs": [
+    {
+      "slug": "freedom",
+      "title": "Freedom",
+      "artist": "Rage Against the Machine",
+      "file": "songs/freedom/song.gp",
+      "noGuitarFile": "songs/freedom/no-guitar.mp3",
+      "defaultTrack": 0,
+      "audioOffsetSeconds": 0,
+      "theme": "default",
+      "tags": ["intermediate", "riffs"]
+    }
+  ]
+}

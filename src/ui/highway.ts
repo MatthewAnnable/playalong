@@ -28,6 +28,23 @@ const ASSUMED_QUARTERS_PER_BAR = 4;
 
 let view: HighwayView | null = null;
 let showingHighway = false;
+let tickSource: () => number = getExtrapolatedTick;
+let activeTheme: Theme = defaultTheme as Theme;
+
+/** OBS mode swaps in a transparent-stage theme so nothing paints a box. */
+export function setHighwayTheme(theme: Theme): void {
+  activeTheme = theme;
+  applyTheme(theme);
+  view?.setTheme(theme);
+}
+
+let usingRemoteTick = false;
+
+/** OBS mode drives the highway from the remote tab instead of local audio. */
+export function setTickSource(source: () => number): void {
+  tickSource = source;
+  usingRemoteTick = true;
+}
 
 function computePxPerTick(): number {
   const lookAheadWidth = canvas.getBoundingClientRect().width * (1 - 0.22);
@@ -46,11 +63,11 @@ function ensureView(): HighwayView {
     view = new HighwayView({
       canvas,
       laneCount: LANE_COUNT,
-      theme: defaultTheme as Theme,
+      theme: activeTheme,
       pxPerTick: computePxPerTick(),
-      getTick: getExtrapolatedTick,
+      getTick: () => tickSource(),
     });
-    applyTheme(defaultTheme as Theme);
+    applyTheme(activeTheme);
   }
   return view;
 }
@@ -76,7 +93,9 @@ export function initHighway(): void {
       view.setNotes(state.noteEvents);
       view.setBarMarkers(state.barMarkers);
     }
-    barInfoEl.textContent = `Bar ${state.currentBar} / ${state.totalBars}`;
+    // With a remote tick source the local engine is parked at bar 1, so
+    // whoever owns that clock owns the bar counter too.
+    if (!usingRemoteTick) barInfoEl.textContent = `Bar ${state.currentBar} / ${state.totalBars}`;
     trackNameEl.textContent = state.trackNames[state.trackIndex] ?? '';
     if (state.ready) {
       const meta = getScoreMeta();

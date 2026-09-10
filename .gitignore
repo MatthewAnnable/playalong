@@ -2,3 +2,7 @@ test-songs/
 node_modules/
 dist/
 public/
+
+# Hosted-library songs are never committed to the public repo.
+songs/*
+!songs/index.example.json

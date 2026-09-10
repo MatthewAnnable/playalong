@@ -7,6 +7,15 @@ import { alphaTab } from '@coderline/alphatab-vite';
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [alphaTab()],
+  build: {
+    rollupOptions: {
+      // remote.html is the OBS control page (build plan 5.9).
+      input: {
+        main: 'index.html',
+        remote: 'remote.html',
+      },
+    },
+  },
   // alphaTab locates its font/soundfont assets relative to its own module
   // URL at runtime. If esbuild pre-bundles it into node_modules/.vite/deps/,
   // that relative lookup breaks (assets get requested from the deps cache

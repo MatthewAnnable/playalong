@@ -27,6 +27,11 @@
         <input id="file-input" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx" hidden />
       </div>
 
+      <section id="library" class="recent-songs" hidden>
+        <h2>Library</h2>
+        <ul id="library-list" class="recent-songs-list"></ul>
+      </section>
+
       <section id="recent-songs" class="recent-songs" hidden>
         <h2>Recent</h2>
         <ul id="recent-songs-list" class="recent-songs-list"></ul>
@@ -74,6 +79,11 @@
             <label class="control control-checkbox" id="guitar-toggle-row" hidden>
               <input id="guitar-toggle" type="checkbox" checked />
               <span>Guitar</span>
+            </label>
+
+            <label class="control control-checkbox" id="audio-source-row" hidden>
+              <input id="audio-source-toggle" type="checkbox" />
+              <span>Audio from OBS</span>
             </label>
 
             <select id="track-select" aria-label="Track"></select>

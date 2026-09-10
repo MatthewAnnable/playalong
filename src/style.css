@@ -571,3 +571,36 @@
   background: var(--ma-ink-ground);
   min-height: 100vh;
 }
+
+/* OBS browser source: the page itself must be transparent so the highway
+   composites over the camera instead of showing as a black box. */
+
+#app.obs,
+#app.obs .highway-surface,
+#app.obs #highway-canvas {
+  background: transparent;
+}
+
+#app.obs {
+  padding: 0;
+  min-height: 100vh;
+}
+
+#app.obs .transport,
+#app.obs .app-header,
+#app.obs .drop-zone,
+#app.obs .recent-songs,
+#app.obs .song-meta,
+#app.obs .status,
+#app.obs .alphatab-surface {
+  display: none;
+}
+
+#app.obs .highway-header {
+  display: flex;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+body:has(#app.obs) {
+  background: transparent;
+}

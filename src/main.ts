@@ -22,6 +22,8 @@ import { listRecentSongs, saveRecentSong, type RecentSong } from './ui/library';
 import { buildPracticeLink, readLinkParams, type LinkParams } from './ui/links';
 import { initShortcuts, registerAction } from './ui/shortcuts';
 import { initShortcutsPanel } from './ui/shortcuts-panel';
+import { initMode } from './ui/modes';
+import { fetchManifest, fetchSongBuffer, resolveManifestUrl, resolveSongUrl, type ManifestSong } from './ui/manifest';
 
 const dropZone = document.querySelector<HTMLDivElement>('#drop-zone')!;
 const fileInput = document.querySelector<HTMLInputElement>('#file-input')!;
@@ -31,6 +33,8 @@ const songTitleEl = document.querySelector<HTMLHeadingElement>('#song-title')!;
 const songArtistEl = document.querySelector<HTMLParagraphElement>('#song-artist')!;
 const recentSongsEl = document.querySelector<HTMLElement>('#recent-songs')!;
 const recentSongsList = document.querySelector<HTMLUListElement>('#recent-songs-list')!;
+const libraryEl = document.querySelector<HTMLElement>('#library')!;
+const libraryList = document.querySelector<HTMLUListElement>('#library-list')!;
 
 const modal = document.querySelector<HTMLDivElement>('#second-file-modal')!;
 const modalText = document.querySelector<HTMLParagraphElement>('#second-file-modal-text')!;
@@ -76,6 +80,9 @@ async function loadSong(file: File): Promise<void> {
     } else {
       setStatus(`Loaded "${file.name}".`);
     }
+    window.dispatchEvent(
+      new CustomEvent('playalong:song-loaded', { detail: { buffer: buffer.slice(0), filename: file.name } }),
+    );
     await saveRecentSong({
       id: file.name,
       filename: file.name,
@@ -278,5 +285,63 @@ initControls();
 initHighway();
 
 linkParams = readLinkParams();
-if (linkParams.song) showPendingSongPrompt(linkParams);
+const mode = initMode(linkParams.mode);
+
+async function loadFromManifest(manifestUrl: string, params: LinkParams): Promise<void> {
+  const manifest = await fetchManifest(manifestUrl);
+  if (!manifest) return;
+  renderLibrary(manifest.songs, manifestUrl);
+  if (!params.song) return;
+  const song = manifest.songs.find((entry) => entry.slug === params.song);
+  if (!song) return;
+  try {
+    const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
+    await openScore(buffer);
+    hasSongLoaded = true;
+    playerEl.hidden = false;
+    songTitleEl.textContent = song.title;
+    songArtistEl.textContent = song.artist;
+    clearPendingSongPrompt();
+    applyLinkParams(params);
+    setStatus(`Loaded "${song.title}" from the library.`);
+  } catch (err) {
+    setStatus((err as Error).message, true);
+  }
+}
+
+function renderLibrary(songs: ManifestSong[], manifestUrl: string): void {
+  if (songs.length === 0) return;
+  libraryEl.hidden = false;
+  libraryList.innerHTML = '';
+  for (const song of songs) {
+    const li = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.innerHTML = `${song.title}<span class="recent-song-artist"> — ${song.artist}</span>`;
+    button.addEventListener('click', async () => {
+      setStatus(`Loading "${song.title}"…`);
+      try {
+        const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
+        await openScore(buffer);
+        hasSongLoaded = true;
+        playerEl.hidden = false;
+        songTitleEl.textContent = song.title;
+        songArtistEl.textContent = song.artist;
+        setStatus(`Loaded "${song.title}".`);
+      } catch (err) {
+        setStatus((err as Error).message, true);
+      }
+    });
+    li.appendChild(button);
+    libraryList.appendChild(li);
+  }
+}
+
+const manifestUrl = resolveManifestUrl(linkParams.manifest);
+if (manifestUrl) {
+  void loadFromManifest(manifestUrl, linkParams);
+  if (linkParams.song) showPendingSongPrompt(linkParams);
+} else if (linkParams.song && mode !== 'obs') {
+  showPendingSongPrompt(linkParams);
+}
 void renderRecentSongs();
