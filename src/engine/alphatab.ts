@@ -230,10 +230,15 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
       output.handler = handler;
       api!.playbackSpeed = state.speed / 100;
 
+      // Build plan 5.3 suggests ~50ms; tightened to 20ms so alphaTab notices
+      // a loop boundary sooner. The seek itself still has to re-decode the
+      // compressed audio from the new position, which is the main source of
+      // the small gap on loop-back — this only trims the detection delay on
+      // top of that, not the decode itself.
       positionLoopId = window.setInterval(() => {
         output.updatePosition(mainAudio!.currentTime * 1000);
         updateFromPlayback();
-      }, 50);
+      }, 20);
 
       state.ready = true;
       state.durationSec = mainAudio!.duration || 0;
