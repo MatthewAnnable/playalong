@@ -3,7 +3,7 @@
 Companion to `playalong-build-plan.md`. That file is the plan; this one is
 where things actually stand. Update it at the end of each phase.
 
-**Last updated:** 2026-09-13, after Matthew's first round of play-testing notes.
+**Last updated:** 2026-09-13, after Matthew's second round of play-testing notes.
 
 ## Done
 
@@ -14,7 +14,8 @@ where things actually stand. Update it at the end of each phase.
 | 2 — Highway view | Done, checked by Matthew |
 | 3 — Links, shortcuts, OBS, overrides, library switch | Built and verified in-browser; **not yet checked by Matthew on real hardware** |
 | Visual redesign (out of plan) | Done — Claude Design redesign, implemented and regression-tested |
-| Play-testing round 1 | Done — eight fixes from Matthew's notes; **not yet checked by him** |
+| Play-testing round 1 | Done — seven fixes from Matthew's notes; **not yet checked by him** |
+| Play-testing round 2 | Done — chord pills, slide redraw, play button; **not yet checked by him** |
 
 The redesign moved the chrome to a top rail plus a fixed bottom transport
 dock, and rewrote the highway renderer so consecutive notes merge into
@@ -61,6 +62,42 @@ Seven items from Matthew's notes, all landed:
    a 46px number; it is now sized from the lane like every other note and the
    number is shrunk to the width across the diamond's waist.
 
+## Play-testing round 2 (2026-09-13)
+
+1. **Chord pills.** A beat sounding three or more strings that spell three or
+   more different notes collapses into one named pill across those strings.
+   `src/engine/chords.ts` names the shape when the file doesn't, matching
+   pitch classes against the shapes a guitarist would name, returning a slash
+   chord when the bass isn't the root and `null` rather than a guess. Two-note
+   shapes are never collapsed — on Freedom that was the difference between 649
+   notes swallowed and 360. The toggle defaults to whatever the file implies
+   (`trackNamesChords`), so riff songs are unaffected unless asked.
+2. **Slides redrawn again.** The leaning seam didn't say "slide". A slide now
+   breaks the run capsule, carves a gap from both pills and draws the slash
+   between them. Pills may shrink to `runCellNumberMinWidth * 0.7`, the same
+   width at which a number is still drawn. Still the weakest mark on the
+   stage at sixteenth-note spacing — it is the headline item in the design
+   hand-off.
+3. **The play button, third attempt.** It fires on `pointerdown` now, its
+   label lives in a `<span>` with `pointer-events: none`, the button doesn't
+   select as text, and the transport's labels are only rewritten when they
+   change rather than 50 times a second under the pointer. Any one of those
+   could have been the cause; together they cannot be.
+4. **Horizontal reading point moved to 40%**, so bars just played stay on
+   screen, and the score scales to the window instead of a fixed 1.7×.
+5. **Open-string keylines removed** — the colour already said it.
+6. Two things found while testing: the highway was capped at 640px tall in
+   presentation by a `max-height` meant for the windowed stage, and the
+   "your browser blocked playback" overlay was appearing for any rejected
+   `play()`, including the AbortError a seek causes.
+
+## Design hand-off (ready to send)
+
+`../playalong-design-handoff-2/` — same shape as the first one. Covers the
+technique marks and the new chord pills only, with five frames captured from
+the live renderer at 1440×900. The slide is the headline problem; the chord
+pill's styling is explicitly a placeholder.
+
 ## Asked for, not built (waiting on Matthew)
 
 - **Microphone listening / Yousician-style scoring.** Explicitly a non-goal
@@ -77,9 +114,9 @@ Seven items from Matthew's notes, all landed:
   two notes, with a tap to expand back to fret numbers. Shape matching
   against a chord dictionary would only be needed for files without chord
   names.
-- **A design pass on the technique marks.** The marks are now correct;
-  whether they are *beautiful* is a separate question worth handing to
-  Claude Design along with the theme JSON.
+- **Expanding one chord pill back to fret numbers on click.** The toggle is
+  all-or-nothing today. Clicking a chord to see the shape behind it is the
+  obvious next step if he wants it.
 
 ## Next: Phase 4 — Polish and hand-over
 

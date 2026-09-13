@@ -400,6 +400,8 @@
 
 #app.presentation #highway-canvas {
   height: 100vh;
+  /* The 640px cap belongs to the windowed stage; presentation fills the screen. */
+  max-height: none;
 }
 
 /* Transport dock */

@@ -182,6 +182,11 @@ export class HighwayView {
     return this.pillHeight() * this.theme.geometry.pillRadiusRatio;
   }
 
+  /** Narrowest a pill may be and still carry a readable (shrunken) fret number. */
+  private minNumberWidth(): number {
+    return this.px(this.theme.geometry.runCellNumberMinWidth) * 0.7;
+  }
+
   private minIsolatedWidth(): number {
     return this.pillHeight() * this.theme.geometry.pillMinWidthRatio;
   }
@@ -745,8 +750,7 @@ export class HighwayView {
       } else {
         // The number is fitted to the cell, so it only has to be dropped when
         // the cell is too narrow for even a shrunken digit to be read.
-        const minNumberWidth = this.px(theme.geometry.runCellNumberMinWidth) * 0.7;
-        if (cell.w >= minNumberWidth) {
+        if (cell.w >= this.minNumberWidth()) {
           const label = String(note.fret);
           const size = this.fittedFontSize(label, this.fretSize(), cell.w * 0.78, theme.geometry.fretWeight);
           ctx.font = `${theme.geometry.fretWeight} ${size}px Manrope, sans-serif`;
@@ -832,7 +836,7 @@ export class HighwayView {
         // Never shrink a pill past the width its fret number needs. A note
         // that slides in and straight out again is carved from both sides,
         // and taking a fixed share each time squeezed it out of existence.
-        const floor = this.px(this.theme.geometry.runCellNumberMinWidth);
+        const floor = this.minNumberWidth();
         const need = want - have;
         const takeFrom = Math.min(need / 2, Math.max(0, lastCell.w - floor));
         const firstCell = to.cells[0];

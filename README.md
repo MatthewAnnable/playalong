@@ -24,6 +24,17 @@ Press `Escape` to come back.
 Drag the progress bar and the score and the highway follow your thumb, so you
 can see where you are about to land before you let go.
 
+## Chord names
+
+When a song's chords are written into the Guitar Pro file, the highway shows
+each one as a single pill across the strings — "G", "Am7", "Dsus4" — instead
+of a fret number per string. Where the file doesn't name a chord, the app
+works it out from the shape. **Chord names** in the top rail turns it off and
+on; it starts on for a song with chords written in, and off for a riff song.
+
+Two-note shapes are never collapsed. A power chord spread over three strings
+is still two notes, and "D5" in place of the frets would hide the riff.
+
 ## Sharing a practice link
 
 Set up the loop, speed, track and view you want, then press **Copy practice
