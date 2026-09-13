@@ -6,3 +6,10 @@ public/
 # Hosted-library songs are never committed to the public repo.
 songs/*
 !songs/index.example.json
+
+# macOS noise
+.DS_Store
+
+# Design source material — the public repo stays app-only.
+design_handoff_playalong_visual_redesign/
+*.zip

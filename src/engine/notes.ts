@@ -3,6 +3,8 @@ import { model } from '@coderline/alphatab';
 export interface NoteEvent {
   startTick: number;
   endTick: number;
+  /** Where the plain pill ends and the tie sustain bar begins, if this note carries ties. */
+  tieBarStartTick?: number;
   bar: number;
   beatIndex: number;
   /** 1 = high E … 6 = low E — alphaTab numbers strings from the bottom, this flips it. */
@@ -82,6 +84,7 @@ export function extractNotes(track: model.Track): NoteEvent[] {
         if (note.isTieDestination && note.tieOrigin) {
           const originEvent = eventByNote.get(note.tieOrigin);
           if (originEvent) {
+            if (originEvent.tieBarStartTick === undefined) originEvent.tieBarStartTick = originEvent.endTick;
             originEvent.endTick = endTick;
             // Register this note too, so a longer tie chain (A -> B -> C)
             // keeps resolving back to A's event when C is processed.

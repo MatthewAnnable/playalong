@@ -8,7 +8,7 @@ import {
   stopLocalPositionLoop,
 } from '../engine/alphatab';
 import { RemoteClock, send, subscribe } from '../engine/sync';
-import { setHighwayTheme, setHighwayView, setTickSource } from './highway';
+import { setHighwayObsMode, setHighwayTheme, setHighwayView, setTickSource } from './highway';
 import { type Theme } from '../theme/theme';
 import defaultTheme from '../theme/themes/default.json';
 
@@ -36,12 +36,14 @@ function applyTransparentStage(): void {
   theme.stage = { ...theme.stage, background: 'rgba(0,0,0,0)' };
   setHighwayTheme(theme);
   document.documentElement.style.setProperty('--stage-bg', 'transparent');
+  document.documentElement.style.setProperty('--stage-header-text-shadow', theme.obs.textShadow);
 }
 
 function initObsMode(): void {
   appEl.classList.add('obs', 'presentation');
   setMuted(true);
   applyTransparentStage();
+  setHighwayObsMode(true);
 
   const clock = new RemoteClock();
   setTickSource(() => clock.currentTick());

@@ -6,6 +6,9 @@ import { alphaTab } from '@coderline/alphatab-vite';
 // student portal later) — see section 5.11 of the build plan.
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? '/',
+  server: {
+    port: process.env.PORT ? Number(process.env.PORT) : 5173,
+  },
   plugins: [alphaTab()],
   build: {
     rollupOptions: {

@@ -15,9 +15,46 @@
   </head>
   <body>
     <main id="app">
-      <header class="app-header">
+      <header class="app-header" id="top-rail">
         <span class="eyebrow">Play-Along</span>
+
+        <div class="rail-song">
+          <h1 id="song-title"></h1>
+          <p id="song-artist" class="song-artist"></p>
+        </div>
+
+        <div class="rail-controls">
+          <div class="segmented" role="group" aria-label="View">
+            <button id="view-toggle-button" class="segmented-option is-active" type="button">Score</button>
+          </div>
+
+          <select id="track-select" class="rail-select" aria-label="Track"></select>
+
+          <label class="control-checkbox" id="guitar-toggle-row" hidden>
+            <input id="guitar-toggle" type="checkbox" checked />
+            <span>Guitar</span>
+          </label>
+
+          <label class="control-checkbox" id="audio-source-row" hidden>
+            <input id="audio-source-toggle" type="checkbox" />
+            <span>Audio from OBS</span>
+          </label>
+
+          <label class="control-checkbox">
+            <input id="tab-only-toggle" type="checkbox" />
+            <span>Tab only</span>
+          </label>
+        </div>
+
+        <nav class="rail-actions">
+          <button id="presentation-button" class="btn-text-green" type="button">Presentation</button>
+          <button id="copy-link-button" class="btn-text-green" type="button">Practice link</button>
+          <button id="shortcuts-button" class="btn-text-green" type="button">Shortcuts</button>
+          <button id="open-another-button" class="btn-text-green" type="button">Open another</button>
+        </nav>
       </header>
+
+      <p id="status" class="status" role="status"></p>
 
       <div id="drop-zone" class="drop-zone">
         <div>
@@ -38,63 +75,6 @@
       </section>
 
       <div id="player" class="player" hidden>
-        <div class="song-meta">
-          <h1 id="song-title"></h1>
-          <p id="song-artist" class="song-artist"></p>
-        </div>
-
-        <div class="transport card">
-          <div class="transport-row">
-            <button id="play-button" class="btn-amber" type="button">Play</button>
-
-            <div class="scrubber-row">
-              <span id="time-current" class="time">0:00</span>
-              <input id="scrubber" class="scrubber" type="range" min="0" max="1000" value="0" />
-              <span id="time-total" class="time">0:00</span>
-            </div>
-
-            <div class="bar-counter">Bar <span id="bar-current">1</span> / <span id="bar-total">1</span></div>
-          </div>
-
-          <div class="control-row">
-            <label class="control">
-              <span class="control-label">Speed</span>
-              <input id="speed-slider" type="range" min="50" max="120" step="5" value="100" />
-              <span id="speed-value" class="control-value">100%</span>
-            </label>
-
-            <label class="control control-checkbox">
-              <input id="loop-toggle" type="checkbox" />
-              <span>Loop bars</span>
-            </label>
-            <input id="loop-start" class="bar-input" type="number" min="1" value="1" aria-label="Loop start bar" />
-            <span class="control-sep">to</span>
-            <input id="loop-end" class="bar-input" type="number" min="1" value="1" aria-label="Loop end bar" />
-
-            <label class="control control-checkbox">
-              <input id="tab-only-toggle" type="checkbox" />
-              <span>Tab only</span>
-            </label>
-
-            <label class="control control-checkbox" id="guitar-toggle-row" hidden>
-              <input id="guitar-toggle" type="checkbox" checked />
-              <span>Guitar</span>
-            </label>
-
-            <label class="control control-checkbox" id="audio-source-row" hidden>
-              <input id="audio-source-toggle" type="checkbox" />
-              <span>Audio from OBS</span>
-            </label>
-
-            <select id="track-select" aria-label="Track"></select>
-
-            <button id="view-toggle-button" class="btn-ghost" type="button">Highway view</button>
-            <button id="presentation-button" class="btn-ghost" type="button">Presentation</button>
-            <button id="copy-link-button" class="btn-ghost" type="button">Copy practice link</button>
-            <button id="shortcuts-button" class="btn-ghost" type="button">Shortcuts</button>
-          </div>
-        </div>
-
         <div id="alphatab" class="alphatab-surface"></div>
 
         <div id="highway" class="highway-surface" hidden>
@@ -113,7 +93,36 @@
         </div>
       </div>
 
-      <p id="status" class="status" role="status"></p>
+      <div class="transport-dock" id="transport-dock">
+        <button id="play-button" class="btn-amber" type="button">Play</button>
+
+        <span id="time-current" class="time">0:00</span>
+        <input id="scrubber" class="scrubber" type="range" min="0" max="1000" value="0" />
+        <span id="time-total" class="time">0:00</span>
+
+        <div class="bar-counter">Bar <span id="bar-current">1</span> / <span id="bar-total">1</span></div>
+
+        <div class="stepper" aria-label="Speed">
+          <button id="speed-down-button" class="stepper-btn" type="button" aria-label="Slower">−</button>
+          <span id="speed-value" class="stepper-value">100%</span>
+          <button id="speed-up-button" class="stepper-btn" type="button" aria-label="Faster">+</button>
+        </div>
+        <input id="speed-slider" type="range" min="50" max="120" step="5" value="100" hidden />
+
+        <div class="loop-chip" id="loop-chip">
+          <input id="loop-toggle" type="checkbox" hidden />
+          <span class="loop-chip-label"
+            >Loop <input id="loop-start" class="loop-bar-input" type="number" min="1" value="1" aria-label="Loop start bar" />–<input
+              id="loop-end"
+              class="loop-bar-input"
+              type="number"
+              min="1"
+              value="1"
+              aria-label="Loop end bar"
+          /></span>
+          <button id="loop-clear-button" class="loop-chip-clear" type="button" aria-label="Clear loop">×</button>
+        </div>
+      </div>
     </main>
 
     <div id="second-file-modal" class="modal-backdrop" hidden>

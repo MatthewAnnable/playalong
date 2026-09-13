@@ -21,6 +21,10 @@ const barCurrent = document.querySelector<HTMLSpanElement>('#bar-current')!;
 const barTotal = document.querySelector<HTMLSpanElement>('#bar-total')!;
 const speedSlider = document.querySelector<HTMLInputElement>('#speed-slider')!;
 const speedValue = document.querySelector<HTMLSpanElement>('#speed-value')!;
+const speedDownButton = document.querySelector<HTMLButtonElement>('#speed-down-button')!;
+const speedUpButton = document.querySelector<HTMLButtonElement>('#speed-up-button')!;
+const loopChip = document.querySelector<HTMLDivElement>('#loop-chip')!;
+const loopClearButton = document.querySelector<HTMLButtonElement>('#loop-clear-button')!;
 const loopToggle = document.querySelector<HTMLInputElement>('#loop-toggle')!;
 const loopStart = document.querySelector<HTMLInputElement>('#loop-start')!;
 const loopEnd = document.querySelector<HTMLInputElement>('#loop-end')!;
@@ -66,6 +70,7 @@ export function initControls(): void {
     speedValue.textContent = `${state.speed}%`;
 
     loopToggle.checked = state.loopEnabled;
+    loopChip.classList.toggle('is-disabled', !state.loopEnabled);
     if (document.activeElement !== loopStart) loopStart.value = String(state.loopStartBar);
     if (document.activeElement !== loopEnd) loopEnd.value = String(state.loopEndBar);
     loopStart.max = String(state.totalBars);
@@ -107,12 +112,22 @@ export function initControls(): void {
     setSpeed(Number(speedSlider.value));
   });
 
+  speedDownButton.addEventListener('click', () => setSpeed(Math.max(Number(speedSlider.value) - 5, 50)));
+  speedUpButton.addEventListener('click', () => setSpeed(Math.min(Number(speedSlider.value) + 5, 120)));
+
   function applyLoopFromInputs(): void {
     setLoop(Number(loopStart.value) || 1, Number(loopEnd.value) || 1, loopToggle.checked);
   }
   loopToggle.addEventListener('change', applyLoopFromInputs);
   loopStart.addEventListener('change', applyLoopFromInputs);
   loopEnd.addEventListener('change', applyLoopFromInputs);
+  loopClearButton.addEventListener('click', () => setLoop(Number(loopStart.value) || 1, Number(loopEnd.value) || 1, false));
+  loopChip.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') return;
+    loopToggle.checked = !loopToggle.checked;
+    applyLoopFromInputs();
+  });
 
   tabOnlyToggle.addEventListener('change', () => {
     setTabOnly(tabOnlyToggle.checked);

@@ -7,7 +7,7 @@ import {
   onStateChange,
 } from '../engine/alphatab';
 import { registerAction } from './shortcuts';
-import { HighwayView, MIN_NOTE_WIDTH_PX } from '../views/highway-view';
+import { HighwayView } from '../views/highway-view';
 import { applyTheme, type Theme } from '../theme/theme';
 import defaultTheme from '../theme/themes/default.json';
 
@@ -23,8 +23,6 @@ const titleEl = document.querySelector<HTMLSpanElement>('#highway-song-title')!;
 const artistEl = document.querySelector<HTMLSpanElement>('#highway-song-artist')!;
 
 const LANE_COUNT = 6;
-const LOOKAHEAD_BARS = 2;
-const ASSUMED_QUARTERS_PER_BAR = 4;
 
 let view: HighwayView | null = null;
 let showingHighway = false;
@@ -46,16 +44,21 @@ export function setTickSource(source: () => number): void {
   usingRemoteTick = true;
 }
 
+/** Switches keyline width and structure-line doubling for OBS composite legibility. */
+export function setHighwayObsMode(obs: boolean): void {
+  ensureView().setObsMode(obs);
+}
+
+/**
+ * Fixed px-per-beat, not bars of look-ahead — musical spacing stays constant
+ * as the stage resizes, so a sixteenth note is always wide enough to read.
+ * At a 1080px-tall stage this yields a 300px beat (a 75px sixteenth).
+ */
 function computePxPerTick(): number {
-  const lookAheadWidth = canvas.getBoundingClientRect().width * (1 - 0.22);
-  const ticksForLookahead = getTicksPerQuarter() * ASSUMED_QUARTERS_PER_BAR * LOOKAHEAD_BARS;
-  const lookaheadBased = ticksForLookahead > 0 ? lookAheadWidth / ticksForLookahead : 0.1;
-  // Two bars of look-ahead on a narrow stage squeezes 16th notes closer
-  // together than a readable pill, so they'd overlap. Readability wins:
-  // show less of the bar ahead rather than a pile of unreadable pills.
-  const sixteenthTicks = getTicksPerQuarter() / 4;
-  const readabilityFloor = sixteenthTicks > 0 ? MIN_NOTE_WIDTH_PX / sixteenthTicks : lookaheadBased;
-  return Math.max(lookaheadBased, readabilityFloor);
+  const stageHeight = canvas.getBoundingClientRect().height;
+  const pxPerBeat = activeTheme.geometry.pxPerBeatRatio * stageHeight;
+  const ticksPerQuarter = getTicksPerQuarter();
+  return ticksPerQuarter > 0 ? pxPerBeat / ticksPerQuarter : 0.1;
 }
 
 function ensureView(): HighwayView {
@@ -76,7 +79,7 @@ export function setHighwayView(visible: boolean): void {
   showingHighway = visible;
   alphatabSurface.hidden = visible;
   highwaySurface.hidden = !visible;
-  viewToggleButton.textContent = visible ? 'Score view' : 'Highway view';
+  viewToggleButton.textContent = visible ? 'Highway' : 'Score';
   if (visible) {
     const v = ensureView();
     v.resize();

@@ -1,12 +1,76 @@
+export interface ThemeGeometry {
+  headerHeight: number;
+  laneHeightFormula: string;
+  pillHeightRatio: number;
+  pillRadiusRatio: number;
+  pillMinWidthRatio: number;
+  fretSizeRatio: number;
+  fretWeight: number;
+  fretTracking: string;
+  pxPerBeatRatio: number;
+  runMergeGap: number;
+  runDividerWidth: number;
+  runCellNumberMinWidth: number;
+  deadWidthRatio: number;
+  tieBarHeightRatio: number;
+  hammerArcWidth: number;
+  hammerArcRise: number;
+  slideTailWidth: number;
+  slideTailAngle: number;
+  bendStemWidth: number;
+  bendRise: number;
+  harmonicRotation: number;
+  harmonicRadius: number;
+  palmMuteRingWidth: number;
+  palmMuteRingOffset: number;
+  chordJoinWidth: number;
+  hitScale: number;
+  hitScaleMs: number;
+  hitRingWidth: number;
+  hitRingGrow: number;
+  hitRingMs: number;
+  playedOpacity: number;
+  playedFadeMs: number;
+}
+
+export interface ThemeObs {
+  laneLight: string;
+  laneLightOpacity: number;
+  laneDark: string;
+  laneDarkOpacity: number;
+  lineWidth: number;
+  textShadow: string;
+}
+
 export interface Theme {
   name: string;
-  stage: { background: string; backgroundImage: string | null; backgroundOpacity: number };
+  stage: { background: string; backgroundImage: string | null; backgroundOpacity: number; transparentInObs?: boolean };
   lane: string;
-  playLine: string;
+  laneOpacity: number;
   barLine: string;
+  barLineOpacity: number;
+  playLine: string;
+  playLineWidth: number;
+  playLineCapSize: number;
+  playLinePosition: number;
+  keyline: string;
+  keylineWidth: number;
+  keylineWidthObs: number;
   text: string;
+  textMuted: string;
+  textEyebrow: string;
+  pillText: string;
   fingers: { open: string; '1': string; '2': string; '3': string; '4': string };
+  pillTextOverrides?: { [key: string]: string };
+  dead: string;
   hit: string;
+  chordJoin: string;
+  chordJoinOpacity: number;
+  techniqueStroke: string;
+  palmMuteRing: string;
+  guessRing: string;
+  obs: ThemeObs;
+  geometry: ThemeGeometry;
 }
 
 export function applyTheme(theme: Theme): void {
@@ -18,13 +82,10 @@ export function applyTheme(theme: Theme): void {
   root.setProperty('--play-line-color', theme.playLine);
   root.setProperty('--bar-line-color', theme.barLine);
   root.setProperty('--stage-text-color', theme.text);
+  root.setProperty('--stage-text-muted', theme.textMuted);
 }
 
-/** Picks readable ink for a fret number drawn on a pill of this colour. */
-export function inkColorFor(pillColor: string): string {
-  const rgb = pillColor.match(/#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
-  if (!rgb) return '#2E2A28';
-  const [r, g, b] = rgb.slice(1).map((h) => parseInt(h, 16) / 255);
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 0.55 ? '#2E2A28' : '#FBF8F3';
+/** Ink for a fret number drawn on a pill of the given finger key ('open' | '1' | '2' | '3' | '4' | 'dead'). */
+export function pillTextFor(theme: Theme, key: string): string {
+  return theme.pillTextOverrides?.[key] ?? theme.pillText;
 }

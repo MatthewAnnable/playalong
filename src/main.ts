@@ -25,10 +25,12 @@ import { initShortcutsPanel } from './ui/shortcuts-panel';
 import { initMode } from './ui/modes';
 import { fetchManifest, fetchSongBuffer, resolveManifestUrl, resolveSongUrl, type ManifestSong } from './ui/manifest';
 
+const appEl = document.querySelector<HTMLElement>('#app')!;
 const dropZone = document.querySelector<HTMLDivElement>('#drop-zone')!;
 const fileInput = document.querySelector<HTMLInputElement>('#file-input')!;
 const statusEl = document.querySelector<HTMLParagraphElement>('#status')!;
 const playerEl = document.querySelector<HTMLDivElement>('#player')!;
+const openAnotherButton = document.querySelector<HTMLButtonElement>('#open-another-button')!;
 const songTitleEl = document.querySelector<HTMLHeadingElement>('#song-title')!;
 const songArtistEl = document.querySelector<HTMLParagraphElement>('#song-artist')!;
 const recentSongsEl = document.querySelector<HTMLElement>('#recent-songs')!;
@@ -58,6 +60,12 @@ function setStatus(message: string, isError = false): void {
   statusEl.classList.toggle('is-error', isError);
 }
 
+/** The drop zone and recent/library lists belong to the empty state only. */
+function revealPlayer(): void {
+  playerEl.hidden = false;
+  appEl.classList.add('has-song');
+}
+
 function isAudioFile(file: File): boolean {
   return file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg)$/i.test(file.name);
 }
@@ -68,7 +76,7 @@ async function loadSong(file: File): Promise<void> {
     const buffer = await readFileAsArrayBuffer(file);
     await openScore(buffer);
     hasSongLoaded = true;
-    playerEl.hidden = false;
+    revealPlayer();
     const meta = getScoreMeta();
     songTitleEl.textContent = meta.title || file.name.replace(/\.[^.]+$/, '');
     songArtistEl.textContent = meta.artist;
@@ -102,7 +110,7 @@ async function loadRecentSong(song: RecentSong): Promise<void> {
   try {
     await openScore(song.buffer.slice(0));
     hasSongLoaded = true;
-    playerEl.hidden = false;
+    revealPlayer();
     songTitleEl.textContent = song.title;
     songArtistEl.textContent = song.artist;
     setStatus(`Loaded "${song.title}".`);
@@ -272,6 +280,7 @@ onStateChange((state) => {
   tapOverlay.hidden = !state.audioBlocked;
 });
 
+openAnotherButton.addEventListener('click', () => fileInput.click());
 copyLinkButton.addEventListener('click', copyPracticeLink);
 tapButton.addEventListener('click', () => {
   tapOverlay.hidden = true;
@@ -298,7 +307,7 @@ async function loadFromManifest(manifestUrl: string, params: LinkParams): Promis
     const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
     await openScore(buffer);
     hasSongLoaded = true;
-    playerEl.hidden = false;
+    revealPlayer();
     songTitleEl.textContent = song.title;
     songArtistEl.textContent = song.artist;
     clearPendingSongPrompt();
@@ -324,7 +333,7 @@ function renderLibrary(songs: ManifestSong[], manifestUrl: string): void {
         const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
         await openScore(buffer);
         hasSongLoaded = true;
-        playerEl.hidden = false;
+        revealPlayer();
         songTitleEl.textContent = song.title;
         songArtistEl.textContent = song.artist;
         setStatus(`Loaded "${song.title}".`);

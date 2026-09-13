@@ -1,10 +1,96 @@
 {
   "name": "default",
-  "stage": { "background": "#1C211A", "backgroundImage": null, "backgroundOpacity": 1 },
-  "lane": "#E3DCD1",
+  "notes": "Play-Along stage theme. Colours only — geometry lives in the renderer. Lengths in this file are px at a 1080px-tall stage; scale linearly with stage height unless marked fixed.",
+
+  "stage": {
+    "background": "#171B14",
+    "backgroundImage": null,
+    "backgroundOpacity": 1,
+    "transparentInObs": true
+  },
+
+  "lane": "#83807A",
+  "laneOpacity": 0.42,
+  "barLine": "#83807A",
+  "barLineOpacity": 0.85,
+
   "playLine": "#F7A630",
-  "barLine": "#6A625C",
+  "playLineWidth": 5,
+  "playLineCapSize": 16,
+  "playLinePosition": 0.22,
+
+  "keyline": "#0D110B",
+  "keylineWidth": 1.5,
+  "keylineWidthObs": 2.5,
+
   "text": "#FBF8F3",
-  "fingers": { "open": "#FBF8F3", "1": "#A8C2A3", "2": "#F7A630", "3": "#C99AA6", "4": "#8FB8D8" },
-  "hit": "#FFB544"
+  "textMuted": "#A8A29A",
+  "textEyebrow": "#A8C2A3",
+  "pillText": "#2E2A28",
+
+  "fingers": {
+    "open": "#F4EFE7",
+    "1": "#FFDE56",
+    "2": "#87E9A3",
+    "3": "#7DC7FF",
+    "4": "#F790BF"
+  },
+  "fingersOklch": {
+    "1": "oklch(0.905 0.155 95)",
+    "2": "oklch(0.855 0.135 152)",
+    "3": "oklch(0.805 0.115 245)",
+    "4": "oklch(0.775 0.135 352)"
+  },
+
+  "dead": "#B0A9A0",
+  "hit": "#FFF2CA",
+  "chordJoin": "#FBF8F3",
+  "chordJoinOpacity": 0.5,
+  "techniqueStroke": "#FBF8F3",
+  "palmMuteRing": "#EBE6DC",
+  "guessRing": "rgba(46,42,40,0.55)",
+
+  "obs": {
+    "laneLight": "#EBE6DC",
+    "laneLightOpacity": 0.75,
+    "laneDark": "#0D110B",
+    "laneDarkOpacity": 0.55,
+    "lineWidth": 2,
+    "textShadow": "0 0 3px #0D110B, 0 1px 2px #0D110B"
+  },
+
+  "geometry": {
+    "headerHeight": 96,
+    "laneHeightFormula": "(stageHeight - headerHeight) / laneCount",
+    "pillHeightRatio": 0.585,
+    "pillRadiusRatio": 0.21,
+    "pillMinWidthRatio": 0.92,
+    "fretSizeRatio": 0.585,
+    "fretWeight": 700,
+    "fretTracking": "-0.02em",
+    "pxPerBeatRatio": 0.278,
+    "runMergeGap": 8,
+    "runDividerWidth": 3,
+    "runCellNumberMinWidth": 56,
+    "deadWidthRatio": 0.75,
+    "tieBarHeightRatio": 0.375,
+    "hammerArcWidth": 4,
+    "hammerArcRise": 28,
+    "slideTailWidth": 9,
+    "slideTailAngle": -34,
+    "bendStemWidth": 9,
+    "bendRise": 62,
+    "harmonicRotation": 45,
+    "harmonicRadius": 14,
+    "palmMuteRingWidth": 5,
+    "palmMuteRingOffset": 7,
+    "chordJoinWidth": 10,
+    "hitScale": 1.06,
+    "hitScaleMs": 90,
+    "hitRingWidth": 4,
+    "hitRingGrow": 10,
+    "hitRingMs": 140,
+    "playedOpacity": 0.4,
+    "playedFadeMs": 200
+  }
 }

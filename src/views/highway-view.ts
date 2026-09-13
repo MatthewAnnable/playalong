@@ -1,6 +1,6 @@
 import type { BarMarker, NoteEvent } from '../engine/notes';
 import type { Theme } from '../theme/theme';
-import { inkColorFor } from '../theme/theme';
+import { pillTextFor } from '../theme/theme';
 
 export interface HighwayViewOptions {
   canvas: HTMLCanvasElement;
@@ -10,29 +10,44 @@ export interface HighwayViewOptions {
   getTick: () => number;
 }
 
-const PLAY_LINE_RATIO = 0.22;
-const HIT_FLASH_MS = 120;
+const STAGE_BASELINE_HEIGHT = 1080;
 
-/**
- * Pill sizing is deliberately capped rather than derived from lane height.
- * Tying it to the lane made pills far wider than the musical spacing they
- * sit in — a 16th note occupies ~14px at a 2-bar look-ahead, so a pill
- * forced to 59px buried its neighbours.
- */
-export const MAX_LANE_HEIGHT = 96;
-export const MAX_PILL_HEIGHT = 44;
-/** Shortest note we still want to render without overlapping its neighbour. */
-export const MIN_NOTE_WIDTH_PX = MAX_PILL_HEIGHT;
+interface LaidOutNote {
+  note: NoteEvent;
+  /** x/w of the note's own musical duration, unpadded. */
+  x: number;
+  w: number;
+  centerY: number;
+}
+
+interface RunCell {
+  note: NoteEvent;
+  /** Rendered rect for this cell — padded to the minimum width when isolated. */
+  x: number;
+  w: number;
+}
+
+interface Run {
+  cells: RunCell[];
+  centerY: number;
+  x: number;
+  w: number;
+}
+
+function fingerKey(finger: 0 | 1 | 2 | 3 | 4): 'open' | '1' | '2' | '3' | '4' {
+  return finger === 0 ? 'open' : (String(finger) as '1' | '2' | '3' | '4');
+}
 
 function fingerColor(theme: Theme, finger: 0 | 1 | 2 | 3 | 4): string {
-  if (finger === 0) return theme.fingers.open;
-  return theme.fingers[String(finger) as '1' | '2' | '3' | '4'];
+  const key = fingerKey(finger);
+  return key === 'open' ? theme.fingers.open : theme.fingers[key];
 }
 
 /**
  * The custom "highway" — six string lanes, notes travelling right to left
- * into a play line. Reusable for a second track later (build plan 5.6):
- * takes its notes and lane count as data, never assumes "the" track.
+ * into a play line. All geometry is derived from the theme's `geometry`
+ * block as ratios of stage height, per the visual-redesign handoff —
+ * nothing is capped, so a tall stage gets a genuinely readable fret number.
  */
 export class HighwayView {
   private canvas: HTMLCanvasElement;
@@ -44,8 +59,9 @@ export class HighwayView {
   private notes: NoteEvent[] = [];
   private barMarkers: BarMarker[] = [];
   private rafId = 0;
+  private obsMode = false;
   private hitNoteIds = new Map<number, number>();
-  /** Last frame's laid-out pills, so a click can be mapped back to a note. */
+  /** Last frame's laid-out run cells, so a click can be mapped back to a note. */
   private lastLayout: { note: NoteEvent; x: number; w: number; centerY: number; h: number }[] = [];
 
   constructor(options: HighwayViewOptions) {
@@ -70,6 +86,10 @@ export class HighwayView {
 
   setTheme(theme: Theme): void {
     this.theme = theme;
+  }
+
+  setObsMode(obs: boolean): void {
+    this.obsMode = obs;
   }
 
   resize(): void {
@@ -97,23 +117,55 @@ export class HighwayView {
     this.pxPerTick = pxPerTick;
   }
 
-  private laneHeight(): number {
-    return Math.min(this.canvas.getBoundingClientRect().height / this.laneCount, MAX_LANE_HEIGHT);
+  // ---- geometry ----------------------------------------------------
+
+  private stageHeight(): number {
+    return this.canvas.getBoundingClientRect().height;
   }
 
-  /** Lanes are centred when the stage is taller than the capped lane block. */
-  private laneTopOffset(): number {
-    const height = this.canvas.getBoundingClientRect().height;
-    return Math.max((height - this.laneHeight() * this.laneCount) / 2, 0);
+  /** Every "fixed" px value in the handoff is fixed at a 1080px-tall stage; scale linearly. */
+  private scale(): number {
+    return this.stageHeight() / STAGE_BASELINE_HEIGHT;
+  }
+
+  private px(baselineValue: number): number {
+    return baselineValue * this.scale();
+  }
+
+  private headerHeight(): number {
+    return this.px(this.theme.geometry.headerHeight);
+  }
+
+  private laneHeight(): number {
+    return (this.stageHeight() - this.headerHeight()) / this.laneCount;
   }
 
   private laneCenterY(laneIndex: number): number {
-    const laneH = this.laneHeight();
-    return this.laneTopOffset() + laneIndex * laneH + laneH / 2;
+    return this.headerHeight() + laneIndex * this.laneHeight() + this.laneHeight() / 2;
+  }
+
+  private pillHeight(): number {
+    return this.laneHeight() * this.theme.geometry.pillHeightRatio;
+  }
+
+  private pillRadius(): number {
+    return this.pillHeight() * this.theme.geometry.pillRadiusRatio;
+  }
+
+  private minIsolatedWidth(): number {
+    return this.pillHeight() * this.theme.geometry.pillMinWidthRatio;
+  }
+
+  private fretSize(): number {
+    return this.pillHeight() * this.theme.geometry.fretSizeRatio;
+  }
+
+  private outlineWidth(): number {
+    return this.px(this.obsMode ? this.theme.keylineWidthObs : this.theme.keylineWidth);
   }
 
   private playLineX(): number {
-    return this.canvas.getBoundingClientRect().width * PLAY_LINE_RATIO;
+    return this.canvas.getBoundingClientRect().width * this.theme.playLinePosition;
   }
 
   private xForTick(tick: number, currentTick: number): number {
@@ -132,6 +184,8 @@ export class HighwayView {
     return lo;
   }
 
+  // ---- frame ----------------------------------------------------
+
   private renderFrame(): void {
     const { width, height } = this.canvas.getBoundingClientRect();
     const ctx = this.ctx;
@@ -148,115 +202,484 @@ export class HighwayView {
     this.drawPlayLine(height);
   }
 
-  private drawLanes(width: number): void {
+  private strokeStructureLine(x0: number, y0: number, x1: number, y1: number, baseColor: string, baseOpacity: number): void {
     const ctx = this.ctx;
-    const laneH = this.laneHeight();
-    const top = this.laneTopOffset();
-    ctx.strokeStyle = this.theme.lane;
-    ctx.globalAlpha = 0.25;
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= this.laneCount; i++) {
-      const y = Math.round(top + i * laneH) + 0.5;
+    if (this.obsMode) {
+      const obs = this.theme.obs;
+      const w = this.px(obs.lineWidth);
+      ctx.lineWidth = w;
+      ctx.strokeStyle = obs.laneLight;
+      ctx.globalAlpha = obs.laneLightOpacity;
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
       ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  private drawPlayLine(height: number): void {
-    const ctx = this.ctx;
-    const x = Math.round(this.playLineX()) + 0.5;
-    ctx.strokeStyle = this.theme.playLine;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-
-  private drawBarMarkers(currentTick: number, width: number, height: number): void {
-    const ctx = this.ctx;
-    const rightEdgeTick = currentTick + (width - this.playLineX()) / this.pxPerTick;
-    const leftEdgeTick = currentTick - this.playLineX() / this.pxPerTick;
-
-    ctx.font = `600 12px ${'Manrope, sans-serif'}`;
-    ctx.fillStyle = this.theme.text;
-    ctx.textBaseline = 'top';
-
-    for (const marker of this.barMarkers) {
-      if (marker.tick < leftEdgeTick || marker.tick > rightEdgeTick) continue;
-      const x = this.xForTick(marker.tick, currentTick);
-      ctx.strokeStyle = this.theme.barLine;
-      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = obs.laneDark;
+      ctx.globalAlpha = obs.laneDarkOpacity;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0 + w);
+      ctx.lineTo(x1, y1 + w);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.strokeStyle = baseColor;
+      ctx.globalAlpha = baseOpacity;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(Math.round(x) + 0.5, 0);
-      ctx.lineTo(Math.round(x) + 0.5, height);
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
       ctx.stroke();
-      ctx.globalAlpha = 0.7;
-      ctx.fillText(String(marker.barNumber), x + 4, 4);
-      if (marker.sectionText) {
-        ctx.save();
-        ctx.font = `600 11px Manrope, sans-serif`;
-        ctx.fillStyle = this.theme.playLine;
-        ctx.fillText(marker.sectionText.toUpperCase(), x + 4, 20);
-        ctx.restore();
-      }
       ctx.globalAlpha = 1;
     }
   }
 
-  private drawNotes(currentTick: number, width: number): void {
-    const ctx = this.ctx;
+  private drawLanes(width: number): void {
     const laneH = this.laneHeight();
+    const top = this.headerHeight();
+    for (let i = 0; i <= this.laneCount; i++) {
+      const y = Math.round(top + i * laneH) + 0.5;
+      this.strokeStructureLine(0, y, width, y, this.theme.lane, this.theme.laneOpacity);
+    }
+  }
+
+  private drawPlayLine(height: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const x = this.playLineX();
+    const w = this.px(theme.playLineWidth);
+    const cap = this.px(theme.playLineCapSize);
+    const keylineW = this.px(theme.keylineWidth);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(13,17,11,0.92)';
+    ctx.lineWidth = w + keylineW * 2;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+
+    ctx.strokeStyle = theme.playLine;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+
+    ctx.fillStyle = theme.playLine;
+    ctx.beginPath();
+    ctx.moveTo(x - cap / 2, 0);
+    ctx.lineTo(x + cap / 2, 0);
+    ctx.lineTo(x, cap);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - cap / 2, height);
+    ctx.lineTo(x + cap / 2, height);
+    ctx.lineTo(x, height - cap);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private drawBarMarkers(currentTick: number, width: number, height: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const rightEdgeTick = currentTick + (width - this.playLineX()) / this.pxPerTick;
+    const leftEdgeTick = currentTick - this.playLineX() / this.pxPerTick;
+    const barLineY0 = this.headerHeight();
+
+    for (const marker of this.barMarkers) {
+      if (marker.tick < leftEdgeTick || marker.tick > rightEdgeTick) continue;
+      const x = this.xForTick(marker.tick, currentTick);
+      const rx = Math.round(x) + 0.5;
+      this.strokeStructureLine(rx, barLineY0, rx, height, theme.barLine, theme.barLineOpacity);
+
+      ctx.font = `600 ${this.px(17)}px Manrope, sans-serif`;
+      ctx.fillStyle = theme.textMuted;
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
+      ctx.fillText(String(marker.barNumber), x + this.px(6), barLineY0 + this.px(6));
+
+      if (marker.sectionText) {
+        ctx.save();
+        ctx.font = `600 ${this.px(13)}px Manrope, sans-serif`;
+        ctx.fillStyle = theme.textEyebrow;
+        ctx.fillText(marker.sectionText.toUpperCase(), x + this.px(6), barLineY0 + this.px(24));
+        ctx.restore();
+      }
+    }
+  }
+
+  // ---- notes ----------------------------------------------------
+
+  /** Pill width covers only the head of the note — a tie sustain renders as a separate bar. */
+  private noteWidth(note: NoteEvent): number {
+    const headEndTick = note.tieBarStartTick ?? note.endTick;
+    const raw = Math.max((headEndTick - note.startTick) * this.pxPerTick, 1);
+    const isDead = note.fret < 0 || note.techniques.dead === true;
+    return isDead ? raw * this.theme.geometry.deadWidthRatio : raw;
+  }
+
+  private drawNotes(currentTick: number, width: number): void {
     const rightEdgeTick = currentTick + (width - this.playLineX()) / this.pxPerTick + 2000;
     const startIndex = this.firstVisibleIndex(currentTick - 2000);
 
-    const visible: { note: NoteEvent; x: number; w: number; centerY: number }[] = [];
-    const chordGroups = new Map<number, NoteEvent[]>();
+    const byLane = new Map<number, LaidOutNote[]>();
+    const chordGroups = new Map<number, LaidOutNote[]>();
+    const tieNotes: LaidOutNote[] = [];
 
     for (let i = startIndex; i < this.notes.length; i++) {
       const note = this.notes[i];
       if (note.startTick > rightEdgeTick) break;
 
       const x = this.xForTick(note.startTick, currentTick);
-      const w = Math.max((note.endTick - note.startTick) * this.pxPerTick, MIN_NOTE_WIDTH_PX);
+      const w = this.noteWidth(note);
       if (x + w < 0 || x > width) continue;
 
       const laneIndex = note.string - 1;
       if (laneIndex < 0 || laneIndex >= this.laneCount) continue;
 
-      visible.push({ note, x, w, centerY: this.laneCenterY(laneIndex) });
+      const item: LaidOutNote = { note, x, w, centerY: this.laneCenterY(laneIndex) };
+      if (!byLane.has(laneIndex)) byLane.set(laneIndex, []);
+      byLane.get(laneIndex)!.push(item);
 
       if (note.isChord) {
         if (!chordGroups.has(note.startTick)) chordGroups.set(note.startTick, []);
-        chordGroups.get(note.startTick)!.push(note);
+        chordGroups.get(note.startTick)!.push(item);
       }
+      if (note.tieBarStartTick !== undefined) tieNotes.push(item);
     }
 
-    // Connectors first, so they sit behind the pills rather than over them.
+    // Chord joins first, so they sit behind the pills rather than over them.
+    this.drawChordJoins(chordGroups);
+
+    const mergeGap = this.px(this.theme.geometry.runMergeGap);
+    this.lastLayout = [];
+
+    for (const [, laneNotes] of byLane) {
+      laneNotes.sort((a, b) => a.x - b.x);
+      const runs = this.buildRuns(laneNotes, mergeGap);
+      for (const run of runs) this.drawRun(run, currentTick);
+    }
+
+    this.drawTieBars(tieNotes, currentTick);
+  }
+
+  /** The tied portion of a sustained note — no number, just a thin continuing bar. */
+  private drawTieBars(tieNotes: LaidOutNote[], currentTick: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const barH = this.pillHeight() * theme.geometry.tieBarHeightRatio;
+    for (const item of tieNotes) {
+      const note = item.note;
+      const barStartX = item.x + item.w;
+      const barEndX = this.xForTick(note.endTick, currentTick);
+      if (barEndX <= barStartX) continue;
+      ctx.fillStyle = fingerColor(theme, note.finger);
+      this.roundRectPath(barStartX, item.centerY - barH / 2, barEndX - barStartX, barH, barH / 2);
+      ctx.fill();
+    }
+  }
+
+  private drawChordJoins(chordGroups: Map<number, LaidOutNote[]>): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const joinW = this.px(theme.geometry.chordJoinWidth);
     for (const group of chordGroups.values()) {
       if (group.length < 2) continue;
-      const x = this.xForTick(group[0].startTick, currentTick);
-      const ys = group.map((n) => this.laneCenterY(n.string - 1));
-      ctx.strokeStyle = this.theme.text;
-      ctx.globalAlpha = 0.18;
-      ctx.lineWidth = 1;
+      const x = group[0].x + group[0].w / 2;
+      const ys = group.map((n) => n.centerY);
+      ctx.strokeStyle = theme.chordJoin;
+      ctx.globalAlpha = theme.chordJoinOpacity;
+      ctx.lineWidth = joinW;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(x + 2, Math.min(...ys));
-      ctx.lineTo(x + 2, Math.max(...ys));
+      ctx.moveTo(x, Math.min(...ys));
+      ctx.lineTo(x, Math.max(...ys));
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+  }
 
-    const pillHeight = Math.min(laneH * 0.62, MAX_PILL_HEIGHT);
-    this.lastLayout = visible.map((item) => ({ ...item, h: pillHeight }));
+  /** Groups same-lane notes whose gap is below the merge threshold into run capsules. */
+  private buildRuns(laneNotes: LaidOutNote[], mergeGap: number): Run[] {
+    const runs: Run[] = [];
+    let current: LaidOutNote[] = [];
 
-    for (const item of visible) {
-      this.drawPill(item.note, item.x, item.w, item.centerY, laneH, currentTick);
+    const flush = () => {
+      if (current.length === 0) return;
+      runs.push(this.layoutRun(current));
+      current = [];
+    };
+
+    for (const item of laneNotes) {
+      // Harmonics get their own diamond shape — never merge them into a run.
+      if (item.note.techniques.harmonic) {
+        flush();
+        runs.push(this.layoutRun([item]));
+        continue;
+      }
+      if (current.length === 0) {
+        current.push(item);
+        continue;
+      }
+      const prev = current[current.length - 1];
+      const gap = item.x - (prev.x + prev.w);
+      if (gap < mergeGap) {
+        current.push(item);
+      } else {
+        flush();
+        current.push(item);
+      }
     }
+    flush();
+
+    return runs;
+  }
+
+  private layoutRun(items: LaidOutNote[]): Run {
+    const cells: RunCell[] = items.map((item) => ({ note: item.note, x: item.x, w: item.w }));
+    if (cells.length === 1) {
+      const minW = this.minIsolatedWidth();
+      if (cells[0].w < minW) {
+        const pad = (minW - cells[0].w) / 2;
+        cells[0] = { ...cells[0], x: cells[0].x - pad, w: minW };
+      }
+    }
+    const x = cells[0].x;
+    const last = cells[cells.length - 1];
+    const w = last.x + last.w - x;
+    return { cells, centerY: items[0].centerY, x, w };
+  }
+
+  private drawRun(run: Run, currentTick: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const pillH = this.pillHeight();
+    const radius = this.pillRadius();
+    const top = run.centerY - pillH / 2;
+    const singleHarmonic = run.cells.length === 1 && run.cells[0].note.techniques.harmonic;
+
+    if (singleHarmonic) {
+      this.drawHarmonicCell(run.cells[0], run.centerY);
+    } else {
+      ctx.save();
+      this.roundRectPath(run.x, top, run.w, pillH, radius);
+      ctx.clip();
+      for (const cell of run.cells) this.fillCell(cell, top, pillH);
+      ctx.restore();
+
+      // Dividers between cells, then the single outer keyline.
+      if (run.cells.length > 1) {
+        const dividerW = this.px(theme.geometry.runDividerWidth);
+        ctx.strokeStyle = this.obsMode ? theme.keyline : theme.stage.background;
+        ctx.lineWidth = dividerW;
+        for (let i = 1; i < run.cells.length; i++) {
+          const bx = run.cells[i].x;
+          ctx.beginPath();
+          ctx.moveTo(bx, top);
+          ctx.lineTo(bx, top + pillH);
+          ctx.stroke();
+        }
+      }
+
+      ctx.save();
+      this.roundRectPath(run.x, top, run.w, pillH, radius);
+      ctx.strokeStyle = theme.keyline;
+      ctx.lineWidth = this.outlineWidth();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Per-cell overlays: technique glyphs, numbers, hit flash, tie bars.
+    for (const cell of run.cells) this.drawCellOverlays(cell, run.centerY, pillH, currentTick);
+
+    // Record layout for click-to-correct-fingering, using cell rects.
+    for (const cell of run.cells) {
+      this.lastLayout.push({ note: cell.note, x: cell.x, w: cell.w, centerY: run.centerY, h: pillH });
+    }
+  }
+
+  private fillCell(cell: RunCell, top: number, pillH: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const note = cell.note;
+    const isDead = note.fret < 0 || note.techniques.dead === true;
+    const isOpen = note.fret === 0 && !isDead;
+
+    ctx.fillStyle = isOpen ? theme.fingers.open : isDead ? theme.dead : fingerColor(theme, note.finger);
+    ctx.fillRect(cell.x, top, cell.w, pillH);
+
+    if (isOpen) {
+      const inset = this.px(6);
+      ctx.strokeStyle = pillTextFor(theme, 'open');
+      ctx.lineWidth = this.px(2);
+      ctx.strokeRect(cell.x + inset, top + inset, cell.w - inset * 2, pillH - inset * 2);
+    }
+  }
+
+  private drawHarmonicCell(cell: RunCell, centerY: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const size = this.px(theme.geometry.harmonicRadius) * 2;
+    const cx = cell.x + cell.w / 2;
+
+    ctx.save();
+    ctx.translate(cx, centerY);
+    ctx.rotate((theme.geometry.harmonicRotation * Math.PI) / 180);
+    const half = size / (2 * Math.SQRT2) + this.px(theme.geometry.harmonicRadius) / 2;
+    ctx.fillStyle = fingerColor(theme, cell.note.finger);
+    ctx.fillRect(-half, -half, half * 2, half * 2);
+    ctx.strokeStyle = theme.keyline;
+    ctx.lineWidth = this.outlineWidth();
+    ctx.strokeRect(-half, -half, half * 2, half * 2);
+    ctx.restore();
+
+    // Number stays upright — drawn without the rotation transform.
+    const fretSize = this.px(46);
+    ctx.font = `700 ${fretSize}px Manrope, sans-serif`;
+    ctx.fillStyle = pillTextFor(theme, fingerKey(cell.note.finger));
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(cell.note.fret), cx, centerY);
+  }
+
+  private drawCellOverlays(cell: RunCell, centerY: number, pillH: number, currentTick: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const note = cell.note;
+    const isDead = note.fret < 0 || note.techniques.dead === true;
+    const isOpen = note.fret === 0 && !isDead;
+
+    if (!note.techniques.harmonic) {
+      const minNumberWidth = this.px(theme.geometry.runCellNumberMinWidth);
+      if (cell.w >= minNumberWidth) {
+        const label = isDead ? '×' : String(note.fret);
+        const key = isOpen ? 'open' : isDead ? 'dead' : fingerKey(note.finger);
+        ctx.font = `${theme.geometry.fretWeight} ${this.fretSize()}px Manrope, sans-serif`;
+        ctx.fillStyle = isOpen ? pillTextFor(theme, 'open') : pillTextFor(theme, key);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, cell.x + cell.w / 2, centerY);
+      }
+    }
+
+    if (note.techniques.palmMute) {
+      ctx.save();
+      const offset = this.px(theme.geometry.palmMuteRingOffset);
+      ctx.setLineDash([this.px(1), this.px(5)]);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = theme.palmMuteRing;
+      ctx.lineWidth = this.px(theme.geometry.palmMuteRingWidth);
+      this.roundRectPath(cell.x + offset, centerY - pillH / 2 + offset, cell.w - offset * 2, pillH - offset * 2, this.pillRadius() * 0.6);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (note.fingerSource === 'guess' && note.finger > 0) {
+      ctx.save();
+      const inset = this.px(14);
+      ctx.setLineDash([this.px(3), this.px(3)]);
+      ctx.strokeStyle = theme.guessRing;
+      ctx.lineWidth = this.px(3);
+      this.roundRectPath(cell.x + inset, centerY - pillH / 2 + inset, cell.w - inset * 2, pillH - inset * 2, this.pillRadius() * 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (note.techniques.slide) {
+      ctx.save();
+      const len = this.px(theme.geometry.slideTailWidth) * 6;
+      const angle = (theme.geometry.slideTailAngle * Math.PI) / 180;
+      const x0 = cell.x + cell.w;
+      const y0 = centerY;
+      const x1 = x0 + len * Math.cos(angle);
+      const y1 = y0 + len * Math.sin(angle);
+      ctx.strokeStyle = theme.keyline;
+      ctx.lineWidth = this.px(theme.geometry.slideTailWidth) + this.outlineWidth();
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.strokeStyle = fingerColor(theme, note.finger);
+      ctx.lineWidth = this.px(theme.geometry.slideTailWidth);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (note.techniques.bend) {
+      ctx.save();
+      const rise = this.px(theme.geometry.bendRise);
+      const x0 = cell.x + cell.w / 2;
+      const y0 = centerY - pillH / 2;
+      ctx.strokeStyle = theme.techniqueStroke;
+      ctx.lineWidth = this.px(theme.geometry.bendStemWidth);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x0, y0 - rise);
+      ctx.stroke();
+      ctx.beginPath();
+      const aw = this.px(theme.geometry.bendStemWidth) * 1.6;
+      ctx.moveTo(x0 - aw, y0 - rise + aw);
+      ctx.lineTo(x0, y0 - rise);
+      ctx.lineTo(x0 + aw, y0 - rise + aw);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (note.techniques.hammer || note.techniques.pull) {
+      ctx.save();
+      const rise = this.px(theme.geometry.hammerArcRise);
+      const x0 = cell.x + cell.w * 0.3;
+      const x1 = cell.x + cell.w * 0.7;
+      const y = centerY - pillH / 2;
+      ctx.strokeStyle = theme.techniqueStroke;
+      ctx.lineWidth = this.px(theme.geometry.hammerArcWidth);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x0, y);
+      ctx.quadraticCurveTo((x0 + x1) / 2, y - rise, x1, y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    this.drawHitEffect(cell, centerY, pillH, currentTick);
+  }
+
+  private hitStartAt(note: NoteEvent): number | undefined {
+    const id = note.startTick * 100 + note.string;
+    return this.hitNoteIds.get(id);
+  }
+
+  private drawHitEffect(cell: RunCell, centerY: number, pillH: number, currentTick: number): void {
+    const note = cell.note;
+    const theme = this.theme;
+    const ringMs = theme.geometry.hitRingMs;
+    const isHitNow = note.startTick <= currentTick && currentTick - note.startTick < theme.geometry.hitScaleMs;
+    if (isHitNow) this.registerHit(note);
+
+    const hitAt = this.hitStartAt(note);
+    if (hitAt === undefined) return;
+    const elapsed = performance.now() - hitAt;
+    if (elapsed > ringMs) {
+      this.hitNoteIds.delete(note.startTick * 100 + note.string);
+      return;
+    }
+    const progress = elapsed / ringMs;
+    const ctx = this.ctx;
+    const grow = this.px(theme.geometry.hitRingGrow) * progress;
+    ctx.save();
+    ctx.globalAlpha = 1 - progress;
+    ctx.strokeStyle = theme.hit;
+    ctx.lineWidth = this.px(theme.geometry.hitRingWidth);
+    this.roundRectPath(cell.x - grow / 2, centerY - pillH / 2 - grow / 2, cell.w + grow, pillH + grow, this.pillRadius());
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** Maps a click in CSS pixels onto the note drawn there, if any. */
@@ -272,128 +695,15 @@ export class HighwayView {
     return null;
   }
 
-  private drawPill(note: NoteEvent, x: number, w: number, centerY: number, laneH: number, currentTick: number): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    const h = Math.min(laneH * 0.62, MAX_PILL_HEIGHT);
-    const radius = Math.min(h / 2, 10);
-    const color = fingerColor(theme, note.finger);
-    const isDead = note.fret < 0 || note.techniques.dead === true;
-    // A dead note is unfretted, so it gets the outlined treatment too —
-    // filling it with the "open" cream made it a blank block.
-    const isHollow = note.fret === 0 || isDead;
-    const labelCenterX = x + Math.min(w, h * 1.6) / 2;
-    const isHit = note.startTick <= currentTick && currentTick - note.startTick < 200;
-
-    if (isHit) this.registerHit(note);
-    const flash = this.hitFlash(note);
-
-    ctx.save();
-    if (flash > 0) {
-      ctx.shadowColor = theme.hit;
-      ctx.shadowBlur = 16 * flash;
-      const scale = 1 + 0.08 * flash;
-      ctx.translate(x + w / 2, centerY);
-      ctx.scale(scale, scale);
-      ctx.translate(-(x + w / 2), -centerY);
-    }
-
-    this.roundRectPath(x, centerY - h / 2, w, h, radius);
-
-    if (note.techniques.harmonic) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(x + w / 2, centerY - h / 2);
-      ctx.lineTo(x + w, centerY);
-      ctx.lineTo(x + w / 2, centerY + h / 2);
-      ctx.lineTo(x, centerY);
-      ctx.closePath();
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.restore();
-    } else if (isHollow) {
-      ctx.fillStyle = theme.stage.background;
-      ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-
-    if (note.techniques.palmMute) {
-      ctx.save();
-      ctx.setLineDash([3, 3]);
-      ctx.strokeStyle = theme.text;
-      ctx.globalAlpha = 0.6;
-      this.roundRectPath(x, centerY - h / 2, w, h, radius);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    if (!note.techniques.harmonic) {
-      const label = isDead ? '×' : String(note.fret);
-      ctx.fillStyle = isHollow ? color : inkColorFor(color);
-      ctx.font = `700 ${Math.max(h * 0.55, 14)}px Manrope, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, labelCenterX, centerY);
-    }
-
-    if (note.fingerSource === 'guess' && note.finger > 0) {
-      ctx.beginPath();
-      ctx.arc(labelCenterX, centerY, h * 0.38, 0, Math.PI * 2);
-      ctx.strokeStyle = theme.stage.background;
-      ctx.globalAlpha = 0.3;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    if (note.techniques.slide) {
-      ctx.beginPath();
-      ctx.moveTo(x + w, centerY - h * 0.3);
-      ctx.lineTo(x + w + h * 0.5, centerY + h * 0.3);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-
-    if (note.techniques.bend) {
-      ctx.beginPath();
-      ctx.moveTo(x + w, centerY);
-      ctx.lineTo(x + w + h * 0.4, centerY - h * 0.5);
-      ctx.moveTo(x + w + h * 0.25, centerY - h * 0.5);
-      ctx.lineTo(x + w + h * 0.4, centerY - h * 0.5);
-      ctx.lineTo(x + w + h * 0.3, centerY - h * 0.3);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-    }
-
-    if (note.techniques.hammer || note.techniques.pull) {
-      ctx.beginPath();
-      ctx.strokeStyle = theme.text;
-      ctx.globalAlpha = 0.6;
-      ctx.lineWidth = 2;
-      ctx.arc(x + w, centerY, h * 0.4, Math.PI * 1.2, Math.PI * 1.8);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.restore();
-  }
-
   private roundRectPath(x: number, y: number, w: number, h: number, r: number): void {
     const ctx = this.ctx;
+    const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
     ctx.closePath();
   }
 
@@ -402,15 +712,4 @@ export class HighwayView {
     if (!this.hitNoteIds.has(id)) this.hitNoteIds.set(id, performance.now());
   }
 
-  private hitFlash(note: NoteEvent): number {
-    const id = note.startTick * 100 + note.string;
-    const hitAt = this.hitNoteIds.get(id);
-    if (hitAt === undefined) return 0;
-    const elapsed = performance.now() - hitAt;
-    if (elapsed > HIT_FLASH_MS) {
-      this.hitNoteIds.delete(id);
-      return 0;
-    }
-    return 1 - elapsed / HIT_FLASH_MS;
-  }
 }
