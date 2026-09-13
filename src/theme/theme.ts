@@ -19,8 +19,11 @@ export interface ThemeGeometry {
   slideTailAngle: number;
   bendStemWidth: number;
   bendRise: number;
+  /** Type size of the ½ / full / 1½ bend label. */
+  bendLabelSize: number;
   harmonicRotation: number;
-  harmonicRadius: number;
+  /** Diamond height as a multiple of pill height. */
+  harmonicSizeRatio: number;
   palmMuteRingWidth: number;
   palmMuteRingOffset: number;
   chordJoinWidth: number;
@@ -68,7 +71,6 @@ export interface Theme {
   chordJoinOpacity: number;
   techniqueStroke: string;
   palmMuteRing: string;
-  guessRing: string;
   obs: ThemeObs;
   geometry: ThemeGeometry;
 }

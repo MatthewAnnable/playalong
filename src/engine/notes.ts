@@ -17,7 +17,13 @@ export interface NoteEvent {
     hammer?: boolean;
     pull?: boolean;
     slide?: boolean;
+    /** Which way the slide leaves this note — tab draws a rising or falling tail, never both the same. */
+    slideOut?: SlideDirection;
+    /** Which way the slide arrives at this note, for a lead-in tail before the pill. */
+    slideIn?: SlideDirection;
     bend?: boolean;
+    /** How far the bend goes, in frets (0.5 = half a tone). Drives the arrow height and its label. */
+    bendFrets?: number;
     palmMute?: boolean;
     harmonic?: boolean;
     vibrato?: boolean;
@@ -26,6 +32,8 @@ export interface NoteEvent {
   };
   isChord: boolean;
 }
+
+export type SlideDirection = 'up' | 'down';
 
 export interface BarMarker {
   tick: number;
@@ -57,6 +65,60 @@ function fingerFromGp(note: model.Note): 0 | 1 | 2 | 3 | 4 | null {
     default:
       return null;
   }
+}
+
+/**
+ * Which way a slide leaves the note. A shift/legato slide is only known by
+ * looking at where it lands; the "slide out" types say so directly.
+ */
+function slideOutDirection(note: model.Note): SlideDirection | undefined {
+  switch (note.slideOutType) {
+    case model.SlideOutType.Shift:
+    case model.SlideOutType.Legato: {
+      const target = note.slideTarget;
+      if (!target) return undefined;
+      return target.fret > note.fret ? 'up' : 'down';
+    }
+    case model.SlideOutType.OutUp:
+    case model.SlideOutType.PickSlideUp:
+      return 'up';
+    case model.SlideOutType.OutDown:
+    case model.SlideOutType.PickSlideDown:
+      return 'down';
+    default:
+      return undefined;
+  }
+}
+
+function slideInDirection(note: model.Note): SlideDirection | undefined {
+  switch (note.slideInType) {
+    case model.SlideInType.IntoFromBelow:
+      return 'up';
+    case model.SlideInType.IntoFromAbove:
+      return 'down';
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * How far the string is pushed, in frets. alphaTab stores bend points in
+ * quarter tones, so 2 units = one semitone = one fret — which is what the
+ * highway needs to draw a half bend differently from a full one.
+ */
+function bendFrets(note: model.Note): number | undefined {
+  if (!note.hasBend) return undefined;
+  const points = note.bendPoints;
+  if (!points || points.length === 0) return undefined;
+  let max = 0;
+  let min = 0;
+  for (const point of points) {
+    if (point.value > max) max = point.value;
+    if (point.value < min) min = point.value;
+  }
+  const quarterTones = Math.max(max, Math.abs(min));
+  if (quarterTones === 0) return undefined;
+  return quarterTones / 2;
 }
 
 /** Flattens one track's notation into a flat, time-sorted array of NoteEvents. */
@@ -111,7 +173,10 @@ export function extractNotes(track: model.Track): NoteEvent[] {
             pull: (isHammerPull && destinationFret <= note.fret) || undefined,
             slide:
               note.slideInType !== model.SlideInType.None || note.slideOutType !== model.SlideOutType.None || undefined,
+            slideOut: slideOutDirection(note),
+            slideIn: slideInDirection(note),
             bend: note.hasBend || undefined,
+            bendFrets: bendFrets(note),
             palmMute: note.isPalmMute || beat.isPalmMute || undefined,
             harmonic: note.isHarmonic || undefined,
             vibrato: note.vibrato !== model.VibratoType.None || undefined,

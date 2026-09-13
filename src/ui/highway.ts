@@ -5,6 +5,7 @@ import {
   getScoreMeta,
   getTicksPerQuarter,
   onStateChange,
+  setScoreViewVisible,
 } from '../engine/alphatab';
 import { registerAction } from './shortcuts';
 import { HighwayView } from '../views/highway-view';
@@ -77,6 +78,7 @@ function ensureView(): HighwayView {
 
 export function setHighwayView(visible: boolean): void {
   showingHighway = visible;
+  setScoreViewVisible(!visible);
   alphatabSurface.hidden = visible;
   highwaySurface.hidden = !visible;
   viewToggleButton.textContent = visible ? 'Highway' : 'Score';

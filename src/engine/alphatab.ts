@@ -1,4 +1,4 @@
-import { AlphaTabApi, PlayerMode, Settings, StaveProfile } from '@coderline/alphatab';
+import { AlphaTabApi, LayoutMode, PlayerMode, ScrollMode, Settings, StaveProfile } from '@coderline/alphatab';
 import { model, synth } from '@coderline/alphatab';
 import { playCountIn } from './countIn';
 import { extractBarMarkers, extractNotes, type BarMarker, type NoteEvent } from './notes';
@@ -39,6 +39,10 @@ let noGuitarObjectUrl: string | null = null;
 let positionLoopId = 0;
 let score: model.Score | null = null;
 let ticksPerQuarter = 960;
+let mediaOutput: synth.IExternalMediaSynthOutput | null = null;
+let horizontalScore = false;
+let presentationOn = false;
+let scoreViewVisible = true;
 
 let countInToken = 0;
 
@@ -63,6 +67,7 @@ const state: EngineState = {
   noteEvents: [],
   barMarkers: [],
 };
+
 
 const listeners = new Set<(state: Readonly<EngineState>) => void>();
 
@@ -366,6 +371,7 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
     api!.playerReady.on(() => {
       const output = api!.player!.output as unknown as synth.IExternalMediaSynthOutput;
       output.handler = handler;
+      mediaOutput = output;
       api!.playbackSpeed = state.speed / 100;
 
       // Build plan 5.3 suggests ~50ms; tightened to 20ms so alphaTab notices
@@ -406,6 +412,8 @@ export function getCurrentTempo(): number {
   return tempoAtBar(state.currentBar);
 }
 
+const HORIZONTAL_SCORE_SCALE = 1.7;
+
 const INK = new model.Color(46, 42, 40);
 const INK_SOFT = new model.Color(106, 98, 92);
 const INK_ON_DARK = new model.Color(251, 248, 243);
@@ -425,20 +433,74 @@ export function setPresentationMode(on: boolean): void {
   resources.barSeparatorColor = on ? LINE_ON_DARK : INK_SOFT;
   resources.barNumberColor = on ? INK_ON_DARK : INK_SOFT;
   resources.scoreInfoColor = on ? INK_ON_DARK : INK;
+  presentationOn = on;
+  applyScoreLayout(wantsHorizontal());
   api.updateSettings();
   api.render();
+}
+
+function wantsHorizontal(): boolean {
+  return presentationOn && scoreViewVisible;
+}
+
+/**
+ * The horizontal line is expensive to lay out (it renders the whole score at
+ * once), so it is only built when the score is the view on screen — switching
+ * to the highway drops back to the page layout.
+ */
+export function setScoreViewVisible(visible: boolean): void {
+  if (scoreViewVisible === visible) return;
+  scoreViewVisible = visible;
+  if (!api || horizontalScore === wantsHorizontal()) return;
+  applyScoreLayout(wantsHorizontal());
+  api.updateSettings();
+  api.render();
+}
+
+/**
+ * Guitar Pro calls this "Screen — horizontal": the whole score on one endless
+ * line that travels past a fixed reading point, instead of an A4 page you have
+ * to scroll down by hand. It is what presentation mode is for — a strip along
+ * the bottom of the screen in a lesson — so presentation mode turns it on and
+ * leaving presentation mode puts the page layout back.
+ */
+function applyScoreLayout(horizontal: boolean): void {
+  if (!api) return;
+  horizontalScore = horizontal;
+  const display = api.settings.display;
+  const player = api.settings.player;
+  display.layoutMode = horizontal ? LayoutMode.Horizontal : LayoutMode.Page;
+  // One line of music has a whole screen to itself, so it can be drawn much
+  // larger — this is the size that reads from across a room on a Zoom share.
+  display.scale = horizontal ? HORIZONTAL_SCORE_SCALE : 1;
+  // Smooth keeps the line moving with the music rather than jumping a bar at a
+  // time; the offset parks the cursor a fifth in from the left, matching where
+  // the highway's play line sits, so there is always a bar of look-ahead.
+  player.scrollMode = horizontal ? ScrollMode.Smooth : ScrollMode.OffScreen;
+  player.scrollOffsetX = horizontal ? -Math.round(container.clientWidth * 0.2) : 0;
+  player.nativeBrowserSmoothScroll = !horizontal;
+  // alphaTab only renders the partials it believes are on screen. The
+  // horizontal strip is scrolled by script inside a clipped container, which
+  // that check cannot see, so the line past the first screen came out blank.
+  api.settings.core.enableLazyLoading = !horizontal;
+  container.classList.toggle('is-horizontal', horizontal);
+}
+
+export function isHorizontalScore(): boolean {
+  return horizontalScore;
 }
 
 export async function togglePlay(): Promise<void> {
   if (!api) return;
 
-  // A second click during the count-in used to start another one, and the
-  // two would toggle playback against each other — which read as the
-  // button simply not working. Clicking during a count-in now cancels it.
+  // A second press during the count-in means "get on with it". It used to
+  // cancel back to a standstill, which is indistinguishable from the button
+  // not working — pressing play now always ends up playing.
   if (state.countingIn) {
     countInToken++;
     state.countingIn = false;
     notify();
+    api.playPause();
     return;
   }
 
@@ -472,9 +534,21 @@ export function nudgeBar(delta: number): void {
   seekToBar(state.currentBar + delta);
 }
 
+/**
+ * Seeks the recording itself rather than asking alphaTab for a tick position:
+ * alphaTab rounds a time to the nearest sync point, which can be seconds away
+ * and made dragging the progress bar feel like it was ignoring you. Setting the
+ * audio element and pushing that position into alphaTab keeps the score cursor
+ * and the highway exactly where the thumb is, which is what makes scrubbing
+ * readable while the button is still held down.
+ */
 export function seekToSeconds(seconds: number): void {
-  if (!api) return;
-  api.timePosition = seconds * 1000;
+  if (!mainAudio) return;
+  const duration = Number.isFinite(mainAudio.duration) ? mainAudio.duration : seconds;
+  const clamped = Math.min(Math.max(seconds, 0), duration);
+  mainAudio.currentTime = clamped;
+  if (noGuitarAudio) noGuitarAudio.currentTime = clamped;
+  mediaOutput?.updatePosition(clamped * 1000);
   updateFromPlayback();
 }
 

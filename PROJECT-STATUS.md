@@ -3,7 +3,7 @@
 Companion to `playalong-build-plan.md`. That file is the plan; this one is
 where things actually stand. Update it at the end of each phase.
 
-**Last updated:** 2026-09-13, after the visual redesign landed.
+**Last updated:** 2026-09-13, after Matthew's first round of play-testing notes.
 
 ## Done
 
@@ -14,12 +14,72 @@ where things actually stand. Update it at the end of each phase.
 | 2 — Highway view | Done, checked by Matthew |
 | 3 — Links, shortcuts, OBS, overrides, library switch | Built and verified in-browser; **not yet checked by Matthew on real hardware** |
 | Visual redesign (out of plan) | Done — Claude Design redesign, implemented and regression-tested |
+| Play-testing round 1 | Done — eight fixes from Matthew's notes; **not yet checked by him** |
 
 The redesign moved the chrome to a top rail plus a fixed bottom transport
 dock, and rewrote the highway renderer so consecutive notes merge into
 grouped runs. `src/theme/themes/default.json` is now the full contract for
 the stage — colours *and* geometry — so visual tuning belongs in that file
 rather than in `highway-view.ts`.
+
+## Play-testing round 1 (2026-09-13)
+
+Seven items from Matthew's notes, all landed:
+
+1. **Scrubbing shows where you are.** Dragging the progress bar now seeks
+   live, throttled to one seek per frame, so the score cursor and the highway
+   move with the thumb. The seek also stopped going through
+   `api.timePosition`, which rounds to the nearest sync point and could land
+   seconds away from where the thumb was.
+2. **Presentation mode is now "Screen — horizontal".** The score view in
+   presentation lays out as one endless line at 1.7× scale, scrolled smoothly
+   by alphaTab with the cursor parked a fifth in from the left. Two gotchas
+   worth remembering: alphaTab's lazy partial rendering has to be turned off
+   (it cannot tell what is visible inside a script-scrolled clipped
+   container), and `.at-surface` must not be a flex item or the line collapses
+   to the container width and renders blank past the first screen. The layout
+   is only built when the score is the visible view.
+3. **Guessed-fingering rings removed.** On a file with no fingering that was
+   every note.
+4. **Technique marks redrawn.** Slides use the real direction from the file
+   (`slideTarget` for shift/legato, the out-type otherwise) instead of always
+   drawing an ascending tail; inside a run the slide leans the seam between
+   the two notes rather than laying a tail over the neighbour. Bends carry
+   their depth — arrow height scaled by tones, labelled ½ / full / 1½ — and
+   technique marks are cream, not the note's finger colour.
+5. **Play button works in presentation.** The faded transport dock was
+   `pointer-events: none`, so a press on the play button went straight through
+   to the score behind it and did nothing. The dock stays pressable while
+   faded, any press or keypress brings it back, and a second press during the
+   count-in now skips into playback instead of cancelling back to a standstill.
+6. **Scratched notes no longer overlap.** Short notes are widened to stay
+   readable, but only into space that is actually free — dead notes are drawn
+   narrower than their duration, so every one of them wanted padding and each
+   grew into its neighbour. The × is stroked to fit the cell rather than set
+   as pill-sized text.
+7. **Harmonic fret numbers fit.** The diamond was a fixed 34px square holding
+   a 46px number; it is now sized from the lane like every other note and the
+   number is shrunk to the width across the diamond's waist.
+
+## Asked for, not built (waiting on Matthew)
+
+- **Microphone listening / Yousician-style scoring.** Explicitly a non-goal
+  for v1 (build plan §7) and a genuinely large piece of work: polyphonic
+  pitch detection on a distorted electric guitar is hard, and the honest
+  version is monophonic — fine for scales and single-note riffs, unreliable
+  for chords. If it is ever wanted, the sane first slice is "did the right
+  note sound near the right time" on single-note lines only, as a practice
+  aid rather than a score.
+- **Chord-shape recognition → one named pill.** Very doable and a good fit
+  for chord songs: Guitar Pro files often carry the chord name on the beat
+  (`beat.chord`), so the first version needs no recognition at all — just
+  draw one pill spanning the lanes when a beat has a chord and more than
+  two notes, with a tap to expand back to fret numbers. Shape matching
+  against a chord dictionary would only be needed for files without chord
+  names.
+- **A design pass on the technique marks.** The marks are now correct;
+  whether they are *beautiful* is a separate question worth handing to
+  Claude Design along with the theme JSON.
 
 ## Next: Phase 4 — Polish and hand-over
 

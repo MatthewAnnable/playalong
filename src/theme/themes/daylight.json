@@ -51,7 +51,6 @@
   "chordJoinOpacity": 0.45,
   "techniqueStroke": "#2E2A28",
   "palmMuteRing": "#6A625C",
-  "guessRing": "rgba(251,248,243,0.6)",
 
   "obs": {
     "laneLight": "#FBF8F3",
@@ -82,9 +81,10 @@
     "slideTailWidth": 9,
     "slideTailAngle": -34,
     "bendStemWidth": 9,
-    "bendRise": 62,
+    "bendRise": 46,
+    "bendLabelSize": 26,
     "harmonicRotation": 45,
-    "harmonicRadius": 14,
+    "harmonicSizeRatio": 1.18,
     "palmMuteRingWidth": 5,
     "palmMuteRingOffset": 7,
     "chordJoinWidth": 10,

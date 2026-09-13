@@ -738,9 +738,11 @@
   transition: opacity 0.3s ease;
 }
 
+/* Faded, but still there to be pressed. When the dock also stopped taking
+   clicks, a press on the play button landed on the score behind it and did
+   nothing at all — the press both brings the dock back and works. */
 #app.presentation.chrome-hidden .transport-dock {
   opacity: 0;
-  pointer-events: none;
 }
 
 #app.presentation .time,
@@ -757,6 +759,22 @@
 #app.presentation .alphatab-surface {
   background: var(--ma-ink-ground);
   min-height: 100vh;
+}
+
+/* "Screen — horizontal": one endless line of score that alphaTab scrolls
+   past the cursor, so nobody has to drag a trackpad through a lesson. */
+.alphatab-surface.is-horizontal {
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+/* No flex or grid here: alphaTab lays the line out in absolutely positioned
+   partials inside .at-surface, and making that a flex item collapses it to the
+   container width so everything past the first screen renders blank. */
+#app.presentation .alphatab-surface.is-horizontal {
+  min-height: 0;
+  height: 100vh;
+  padding-top: 12vh;
 }
 
 /* OBS browser source: the page itself must be transparent so the highway

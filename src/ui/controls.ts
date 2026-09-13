@@ -95,18 +95,48 @@ export function initControls(): void {
 
   playButton.addEventListener('click', () => void togglePlay());
 
+  // Dragging the progress bar moves the score and the highway with the thumb,
+  // so you can see where you are landing before letting go. The seek itself is
+  // throttled to one a frame — the raw input stream fires far faster than the
+  // audio element can be re-positioned.
+  let scrubFrame = 0;
+  function previewScrub(): void {
+    if (scrubFrame) return;
+    scrubFrame = requestAnimationFrame(() => {
+      scrubFrame = 0;
+      const ratio = Number(scrubber.value) / SCRUBBER_RESOLUTION;
+      seekToSeconds(ratio * durationSec);
+    });
+  }
+  function endScrub(): void {
+    if (!isScrubbing) return;
+    isScrubbing = false;
+    if (scrubFrame) cancelAnimationFrame(scrubFrame);
+    scrubFrame = 0;
+    const ratio = Number(scrubber.value) / SCRUBBER_RESOLUTION;
+    seekToSeconds(ratio * durationSec);
+  }
+
   scrubber.addEventListener('pointerdown', () => {
     isScrubbing = true;
   });
   scrubber.addEventListener('input', () => {
     const ratio = Number(scrubber.value) / SCRUBBER_RESOLUTION;
     timeCurrent.textContent = formatTime(ratio * durationSec);
+    if (isScrubbing) previewScrub();
   });
+  // Keyboard use of the slider never sets isScrubbing, so 'change' still has to
+  // seek; pointer use is finished by the pointer coming up anywhere on screen.
   scrubber.addEventListener('change', () => {
+    if (isScrubbing) {
+      endScrub();
+      return;
+    }
     const ratio = Number(scrubber.value) / SCRUBBER_RESOLUTION;
     seekToSeconds(ratio * durationSec);
-    isScrubbing = false;
   });
+  window.addEventListener('pointerup', endScrub);
+  window.addEventListener('pointercancel', endScrub);
 
   speedSlider.addEventListener('input', () => {
     setSpeed(Number(speedSlider.value));
@@ -159,9 +189,14 @@ export function initControls(): void {
   }
 
   presentationButton.addEventListener('click', () => togglePresentation());
-  appEl.addEventListener('mousemove', () => {
-    if (appEl.classList.contains('presentation')) resetIdleTimer();
-  });
+  // Any sign of life brings the dock back, not just a moved mouse: pressing a
+  // faded control has to count, or the press that wakes the dock is the press
+  // that gets swallowed.
+  for (const event of ['mousemove', 'pointerdown', 'keydown', 'wheel'] as const) {
+    appEl.addEventListener(event, () => {
+      if (appEl.classList.contains('presentation')) resetIdleTimer();
+    });
+  }
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && appEl.classList.contains('presentation')) togglePresentation(false);
   });
