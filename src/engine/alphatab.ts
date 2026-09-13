@@ -1,7 +1,7 @@
 import { AlphaTabApi, LayoutMode, PlayerMode, ScrollMode, Settings, StaveProfile } from '@coderline/alphatab';
 import { model, synth } from '@coderline/alphatab';
 import { playCountIn } from './countIn';
-import { extractBarMarkers, extractNotes, type BarMarker, type NoteEvent } from './notes';
+import { extractBarMarkers, extractNotes, trackNamesChords, type BarMarker, type NoteEvent } from './notes';
 import { applyFingeringHeuristic } from './fingering';
 import { applyOverrides, loadOverrides, overrideKey, setOverride } from './overrides';
 import { slugify } from './slug';
@@ -25,6 +25,8 @@ export interface EngineState {
   hasNoGuitarTrack: boolean;
   trackNames: string[];
   trackIndex: number;
+  /** True when the file names chords, which is what decides the chord-pill default. */
+  hasChordNames: boolean;
   noteEvents: NoteEvent[];
   barMarkers: BarMarker[];
 }
@@ -64,6 +66,7 @@ const state: EngineState = {
   hasNoGuitarTrack: false,
   trackNames: [],
   trackIndex: 0,
+  hasChordNames: false,
   noteEvents: [],
   barMarkers: [],
 };
@@ -116,9 +119,15 @@ function makeExternalMediaHandler(el: HTMLAudioElement): synth.IExternalMediaHan
             notify();
           }
         },
-        () => {
-          state.audioBlocked = true;
-          notify();
+        (err: DOMException) => {
+          // Only a real autoplay refusal deserves the overlay. A play() that
+          // was interrupted by a pause or a seek rejects with AbortError,
+          // and throwing "your browser blocked playback" over the whole
+          // screen for that is worse than the hiccup it is reporting.
+          if (err?.name === 'NotAllowedError') {
+            state.audioBlocked = true;
+            notify();
+          }
         },
       );
       if (noGuitarAudio) void noGuitarAudio.play();
@@ -273,6 +282,7 @@ function loadNotesForTrack(loadedScore: model.Score, index: number): void {
   const events = extractNotes(track);
   applyFingeringHeuristic(events);
   applyOverrides(events, loadOverrides(getSongSlug()));
+  state.hasChordNames = trackNamesChords(track);
   state.noteEvents = events;
 }
 
@@ -329,6 +339,7 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
     loopEndBar: 1,
     guitarOn: true,
     hasNoGuitarTrack: false,
+    hasChordNames: false,
     noteEvents: [],
     barMarkers: [],
   });
@@ -412,7 +423,17 @@ export function getCurrentTempo(): number {
   return tempoAtBar(state.currentBar);
 }
 
-const HORIZONTAL_SCORE_SCALE = 1.7;
+/** Height the transport dock and the stage's own padding take out of the window. */
+const HORIZONTAL_CHROME_HEIGHT = 210;
+const HORIZONTAL_SYSTEM_HEIGHT = 400;
+const HORIZONTAL_SCALE_MAX = 1.7;
+
+function horizontalScale(): number {
+  const available = window.innerHeight - HORIZONTAL_CHROME_HEIGHT;
+  return Math.min(Math.max(available / HORIZONTAL_SYSTEM_HEIGHT, 1), HORIZONTAL_SCALE_MAX);
+}
+/** Where the played bar sits across the stage, left to right. */
+const HORIZONTAL_READING_POINT = 0.4;
 
 const INK = new model.Color(46, 42, 40);
 const INK_SOFT = new model.Color(106, 98, 92);
@@ -470,14 +491,16 @@ function applyScoreLayout(horizontal: boolean): void {
   const display = api.settings.display;
   const player = api.settings.player;
   display.layoutMode = horizontal ? LayoutMode.Horizontal : LayoutMode.Page;
-  // One line of music has a whole screen to itself, so it can be drawn much
-  // larger — this is the size that reads from across a room on a Zoom share.
-  display.scale = horizontal ? HORIZONTAL_SCORE_SCALE : 1;
+  // One line of music has the whole screen to itself, so it can be drawn much
+  // larger — big enough to read across a room on a Zoom share, but scaled back
+  // on a short window so the tab staff doesn't fall off the bottom.
+  display.scale = horizontal ? horizontalScale() : 1;
   // Smooth keeps the line moving with the music rather than jumping a bar at a
-  // time; the offset parks the cursor a fifth in from the left, matching where
-  // the highway's play line sits, so there is always a bar of look-ahead.
+  // time. The reading point sits at HORIZONTAL_READING_POINT across the stage —
+  // far enough in that the bars just played stay on screen to talk about, while
+  // most of the width is still look-ahead.
   player.scrollMode = horizontal ? ScrollMode.Smooth : ScrollMode.OffScreen;
-  player.scrollOffsetX = horizontal ? -Math.round(container.clientWidth * 0.2) : 0;
+  player.scrollOffsetX = horizontal ? -Math.round(container.clientWidth * HORIZONTAL_READING_POINT) : 0;
   player.nativeBrowserSmoothScroll = !horizontal;
   // alphaTab only renders the partials it believes are on screen. The
   // horizontal strip is scrolled by script inside a clipped container, which

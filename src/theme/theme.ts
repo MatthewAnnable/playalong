@@ -16,6 +16,9 @@ export interface ThemeGeometry {
   hammerArcWidth: number;
   hammerArcRise: number;
   slideTailWidth: number;
+  /** Clear space carved between a note and the note it slides to. */
+  slideGap: number;
+  slideLinkWidth: number;
   slideTailAngle: number;
   bendStemWidth: number;
   bendRise: number;
@@ -65,6 +68,8 @@ export interface Theme {
   pillText: string;
   fingers: { open: string; '1': string; '2': string; '3': string; '4': string };
   pillTextOverrides?: { [key: string]: string };
+  /** Ground for the one-pill-across-the-strings chord marker. */
+  chordPill: string;
   dead: string;
   hit: string;
   chordJoin: string;

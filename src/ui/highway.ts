@@ -16,6 +16,7 @@ const alphatabSurface = document.querySelector<HTMLDivElement>('#alphatab')!;
 const highwaySurface = document.querySelector<HTMLDivElement>('#highway')!;
 const canvas = document.querySelector<HTMLCanvasElement>('#highway-canvas')!;
 const viewToggleButton = document.querySelector<HTMLButtonElement>('#view-toggle-button')!;
+const chordNamesToggle = document.querySelector<HTMLInputElement>('#chord-names-toggle')!;
 
 const barInfoEl = document.querySelector<HTMLSpanElement>('#highway-bar-info')!;
 const tempoEl = document.querySelector<HTMLSpanElement>('#highway-tempo')!;
@@ -29,6 +30,7 @@ let view: HighwayView | null = null;
 let showingHighway = false;
 let tickSource: () => number = getExtrapolatedTick;
 let activeTheme: Theme = defaultTheme as Theme;
+let lastHasChordNames: boolean | null = null;
 
 /** OBS mode swaps in a transparent-stage theme so nothing paints a box. */
 export function setHighwayTheme(theme: Theme): void {
@@ -71,6 +73,7 @@ function ensureView(): HighwayView {
       pxPerTick: computePxPerTick(),
       getTick: () => tickSource(),
     });
+    view.setChordPills(chordNamesToggle.checked);
     applyTheme(activeTheme);
   }
   return view;
@@ -100,6 +103,13 @@ export function initHighway(): void {
     }
     // With a remote tick source the local engine is parked at bar 1, so
     // whoever owns that clock owns the bar counter too.
+    // Chord pills follow the file: on for a song whose chords are written in,
+    // off for a riff song, until Matthew says otherwise for this song.
+    if (state.hasChordNames !== lastHasChordNames) {
+      lastHasChordNames = state.hasChordNames;
+      chordNamesToggle.checked = state.hasChordNames;
+      view?.setChordPills(state.hasChordNames);
+    }
     if (!usingRemoteTick) barInfoEl.textContent = `Bar ${state.currentBar} / ${state.totalBars}`;
     trackNameEl.textContent = state.trackNames[state.trackIndex] ?? '';
     if (state.ready) {
@@ -111,6 +121,10 @@ export function initHighway(): void {
   });
 
   viewToggleButton.addEventListener('click', () => setHighwayView(!showingHighway));
+
+  chordNamesToggle.addEventListener('change', () => {
+    ensureView().setChordPills(chordNamesToggle.checked);
+  });
 
   window.addEventListener('resize', () => {
     if (!showingHighway || !view) return;

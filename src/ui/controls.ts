@@ -14,6 +14,7 @@ import {
 import { registerAction } from './shortcuts';
 
 const playButton = document.querySelector<HTMLButtonElement>('#play-button')!;
+const playButtonLabel = document.querySelector<HTMLSpanElement>('#play-button-label')!;
 const scrubber = document.querySelector<HTMLInputElement>('#scrubber')!;
 const timeCurrent = document.querySelector<HTMLSpanElement>('#time-current')!;
 const timeTotal = document.querySelector<HTMLSpanElement>('#time-total')!;
@@ -40,6 +41,16 @@ let isScrubbing = false;
 let durationSec = 0;
 const SCRUBBER_RESOLUTION = 1000;
 
+/**
+ * Only touches the DOM when the text actually changed. The transport is
+ * repainted 50 times a second from the position loop, and rewriting a label
+ * that often replaces the text node under the pointer — which is the sort of
+ * thing that makes a press land on nothing.
+ */
+function setText(el: HTMLElement, value: string): void {
+  if (el.textContent !== value) el.textContent = value;
+}
+
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
   const mins = Math.floor(seconds / 60);
@@ -50,9 +61,8 @@ function formatTime(seconds: number): string {
 export function initControls(): void {
   onStateChange((state) => {
     currentState = state;
-    if (state.countingIn) playButton.textContent = 'Counting in…';
-    else playButton.textContent = state.isPlaying ? 'Pause' : 'Play';
-    playButton.disabled = !state.ready;
+    setText(playButtonLabel, state.countingIn ? 'Counting in…' : state.isPlaying ? 'Pause' : 'Play');
+    if (playButton.disabled === state.ready) playButton.disabled = !state.ready;
 
     if (!isScrubbing) {
       scrubber.max = String(SCRUBBER_RESOLUTION);
@@ -60,14 +70,14 @@ export function initControls(): void {
       scrubber.value = String(Math.round(ratio * SCRUBBER_RESOLUTION));
     }
     durationSec = state.durationSec;
-    timeCurrent.textContent = formatTime(state.currentTimeSec);
-    timeTotal.textContent = formatTime(state.durationSec);
+    setText(timeCurrent, formatTime(state.currentTimeSec));
+    setText(timeTotal, formatTime(state.durationSec));
 
-    barCurrent.textContent = String(state.currentBar);
-    barTotal.textContent = String(state.totalBars);
+    setText(barCurrent, String(state.currentBar));
+    setText(barTotal, String(state.totalBars));
 
     speedSlider.value = String(state.speed);
-    speedValue.textContent = `${state.speed}%`;
+    setText(speedValue, `${state.speed}%`);
 
     loopToggle.checked = state.loopEnabled;
     loopChip.classList.toggle('is-disabled', !state.loopEnabled);
@@ -93,7 +103,23 @@ export function initControls(): void {
     trackSelect.value = String(state.trackIndex);
   });
 
-  playButton.addEventListener('click', () => void togglePlay());
+  // The transport's primary control fires on press, not on a completed click.
+  // A click needs the press and the release to agree on a target, and this
+  // button sits under a label that the position loop keeps rewriting — pressing
+  // on the word itself was being swallowed. A press is also what a footswitch
+  // or a tap on glass feels like it should do.
+  let lastPress = 0;
+  playButton.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    lastPress = performance.now();
+    void togglePlay();
+  });
+  playButton.addEventListener('click', () => {
+    // Keyboard activation (Enter or Space) arrives as a click with no press
+    // in front of it; a pointer's own click is swallowed as a duplicate.
+    if (performance.now() - lastPress < 700) return;
+    void togglePlay();
+  });
 
   // Dragging the progress bar moves the score and the highway with the thumb,
   // so you can see where you are landing before letting go. The seek itself is

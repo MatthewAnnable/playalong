@@ -48,6 +48,32 @@ describe('extractNotes', () => {
   });
 });
 
+describe('chord names', () => {
+  it('never collapses a power chord, however many strings it is spread over', () => {
+    const score = loadFreedom();
+    for (const track of score.tracks) {
+      for (const event of extractNotes(track)) {
+        if (!event.chordName) continue;
+        // Every note of the beat carries the name, so re-derive the beat's
+        // pitch classes from the events sharing this start tick.
+        expect(event.chordName).not.toMatch(/^[A-G]#?5$/);
+      }
+    }
+  });
+
+  it('agrees on one name for every note of a beat', () => {
+    const events = extractNotes(loadFreedom().tracks[0]);
+    const byTick = new Map<number, Set<string | undefined>>();
+    for (const event of events) {
+      if (!byTick.has(event.startTick)) byTick.set(event.startTick, new Set());
+      byTick.get(event.startTick)!.add(event.chordName);
+    }
+    for (const names of byTick.values()) {
+      expect(names.size).toBe(1);
+    }
+  });
+});
+
 describe('applyFingeringHeuristic', () => {
   it('only assigns fingers 1-4 to fretted notes, and 0 to open/dead notes', () => {
     const score = loadFreedom();

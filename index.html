@@ -44,6 +44,11 @@
             <input id="tab-only-toggle" type="checkbox" />
             <span>Tab only</span>
           </label>
+
+          <label class="control-checkbox" id="chord-names-row">
+            <input id="chord-names-toggle" type="checkbox" />
+            <span>Chord names</span>
+          </label>
         </div>
 
         <nav class="rail-actions">
@@ -94,7 +99,7 @@
       </div>
 
       <div class="transport-dock" id="transport-dock">
-        <button id="play-button" class="btn-amber" type="button">Play</button>
+        <button id="play-button" class="btn-amber" type="button"><span id="play-button-label">Play</span></button>
 
         <span id="time-current" class="time">0:00</span>
         <input id="scrubber" class="scrubber" type="range" min="0" max="1000" value="0" />

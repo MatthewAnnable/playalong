@@ -27,8 +27,17 @@ interface RunCell {
   w: number;
 }
 
+interface SlideLink {
+  x0: number;
+  x1: number;
+  centerY: number;
+  direction: 'up' | 'down';
+}
+
 interface Run {
   cells: RunCell[];
+  /** True when this run's last note slides into the next run, which draws the mark instead. */
+  linkedSlide?: boolean;
   centerY: number;
   x: number;
   w: number;
@@ -75,6 +84,7 @@ export class HighwayView {
   private barMarkers: BarMarker[] = [];
   private rafId = 0;
   private obsMode = false;
+  private chordPills = true;
   private hitNoteIds = new Map<number, number>();
   /** Last frame's laid-out run cells, so a click can be mapped back to a note. */
   private lastLayout: { note: NoteEvent; x: number; w: number; centerY: number; h: number }[] = [];
@@ -105,6 +115,11 @@ export class HighwayView {
 
   setObsMode(obs: boolean): void {
     this.obsMode = obs;
+  }
+
+  /** Collapse a named chord into one pill across the strings, instead of a fret number per string. */
+  setChordPills(on: boolean): void {
+    this.chordPills = on;
   }
 
   resize(): void {
@@ -341,6 +356,7 @@ export class HighwayView {
 
     const byLane = new Map<number, LaidOutNote[]>();
     const chordGroups = new Map<number, LaidOutNote[]>();
+    const namedChords = new Map<number, LaidOutNote[]>();
     const tieNotes: LaidOutNote[] = [];
 
     for (let i = startIndex; i < this.notes.length; i++) {
@@ -355,6 +371,15 @@ export class HighwayView {
       if (laneIndex < 0 || laneIndex >= this.laneCount) continue;
 
       const item: LaidOutNote = { note, x, w, centerY: this.laneCenterY(laneIndex) };
+
+      // A named chord is drawn once, across the strings — its notes never
+      // reach the per-lane layout at all.
+      if (this.chordPills && note.chordName) {
+        if (!namedChords.has(note.startTick)) namedChords.set(note.startTick, []);
+        namedChords.get(note.startTick)!.push(item);
+        continue;
+      }
+
       if (!byLane.has(laneIndex)) byLane.set(laneIndex, []);
       byLane.get(laneIndex)!.push(item);
 
@@ -375,8 +400,12 @@ export class HighwayView {
       laneNotes.sort((a, b) => a.x - b.x);
       const runs = this.buildRuns(laneNotes, mergeGap);
       this.padIsolatedRuns(runs);
+      const slideLinks = this.carveSlideGaps(runs);
       for (const run of runs) this.drawRun(run, currentTick);
+      for (const link of slideLinks) this.drawSlideLink(link, this.pillHeight());
     }
+
+    this.drawChordPills([...namedChords.values()]);
 
     this.drawTieBars(tieNotes, currentTick);
   }
@@ -395,6 +424,84 @@ export class HighwayView {
       this.roundRectPath(barStartX, item.centerY - barH / 2, barEndX - barStartX, barH, barH / 2);
       ctx.fill();
     }
+  }
+
+  /**
+   * One pill spanning the strings the chord is played on, carrying its name.
+   * Six fret numbers tell a student which frets to hold; "G" tells them what
+   * they are playing, which on a chord song is the thing worth reading.
+   */
+  private drawChordPills(groups: LaidOutNote[][]): void {
+    const gutter = this.px(this.theme.geometry.runMergeGap);
+    const laid = groups
+      .map((group) => ({
+        group,
+        left: Math.min(...group.map((item) => item.x)),
+        right: Math.max(...group.map((item) => item.x + item.w)),
+      }))
+      .sort((a, b) => a.left - b.left);
+
+    for (let i = 0; i < laid.length; i++) {
+      const limitLeft = i > 0 ? laid[i - 1].right + gutter : Number.NEGATIVE_INFINITY;
+      const limitRight = i < laid.length - 1 ? laid[i + 1].left - gutter : Number.POSITIVE_INFINITY;
+      const drawn = this.drawChordPill(laid[i].group, laid[i].left, laid[i].right, limitLeft, limitRight);
+      laid[i].right = drawn;
+    }
+  }
+
+  /**
+   * One pill spanning the strings the chord is played on, carrying its name.
+   * Six fret numbers tell a student which frets to hold; "G" tells them what
+   * they are playing, which on a chord song is the thing worth reading.
+   *
+   * @returns the right edge actually drawn, so the next chord can keep clear of it.
+   */
+  private drawChordPill(
+    group: LaidOutNote[],
+    left: number,
+    right: number,
+    limitLeft: number,
+    limitRight: number,
+  ): number {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const name = group[0].note.chordName ?? '';
+    const pillH = this.pillHeight();
+    const radius = this.pillRadius();
+    const musicalW = right - left;
+
+    // A chord name is several characters where a fret number is one or two, so
+    // the pill may grow to fit its name — but never into the next chord.
+    const nameSize = this.fretSize() * 0.8;
+    ctx.font = `${theme.geometry.fretWeight} ${nameSize}px Manrope, sans-serif`;
+    const wanted = Math.min(ctx.measureText(name).width + nameSize, musicalW * 2);
+    const grow = Math.max(0, wanted - musicalW) / 2;
+    const x = Math.max(left - grow, limitLeft);
+    const w = Math.max(Math.min(right + grow, limitRight) - x, this.minIsolatedWidth() * 0.6);
+
+    const top = Math.min(...group.map((item) => item.centerY)) - pillH / 2;
+    const bottom = Math.max(...group.map((item) => item.centerY)) + pillH / 2;
+
+    ctx.save();
+    ctx.fillStyle = theme.chordPill;
+    this.roundRectPath(x, top, w, bottom - top, radius);
+    ctx.fill();
+    ctx.strokeStyle = theme.keyline;
+    ctx.lineWidth = this.outlineWidth();
+    ctx.stroke();
+
+    const size = this.fittedFontSize(name, nameSize, w * 0.86, theme.geometry.fretWeight);
+    ctx.font = `${theme.geometry.fretWeight} ${size}px Manrope, sans-serif`;
+    ctx.fillStyle = pillTextFor(theme, 'chord');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name, x + w / 2, (top + bottom) / 2);
+    ctx.restore();
+
+    for (const item of group) {
+      this.lastLayout.push({ note: item.note, x, w, centerY: item.centerY, h: pillH });
+    }
+    return x + w;
   }
 
   private drawChordJoins(chordGroups: Map<number, LaidOutNote[]>): void {
@@ -440,8 +547,11 @@ export class HighwayView {
         continue;
       }
       const prev = current[current.length - 1];
+      // A slide has to be seen travelling from one note to the next, so the
+      // two never share a capsule — they stay separate pills with the slide
+      // drawn in the space between them.
       const gap = item.x - (prev.x + prev.w);
-      if (gap < mergeGap) {
+      if (gap < mergeGap && !prev.note.techniques.slideOut && !item.note.techniques.slideIn) {
         current.push(item);
       } else {
         flush();
@@ -524,18 +634,10 @@ export class HighwayView {
       // Dividers between cells, then the single outer keyline.
       if (run.cells.length > 1) {
         const dividerW = this.px(theme.geometry.runDividerWidth);
+        ctx.strokeStyle = this.obsMode ? theme.keyline : theme.stage.background;
+        ctx.lineWidth = dividerW;
         for (let i = 1; i < run.cells.length; i++) {
           const bx = run.cells[i].x;
-          const slide = run.cells[i - 1].note.techniques.slideOut;
-          if (slide) {
-            // Inside a run there is no room for a tail, so the seam itself
-            // leans the way the finger travels — up for an ascending slide,
-            // down for a descending one.
-            this.drawSlideSeam(bx, run.centerY, pillH, slide);
-            continue;
-          }
-          ctx.strokeStyle = this.obsMode ? theme.keyline : theme.stage.background;
-          ctx.lineWidth = dividerW;
           ctx.beginPath();
           ctx.moveTo(bx, top);
           ctx.lineTo(bx, top + pillH);
@@ -567,15 +669,10 @@ export class HighwayView {
     const isDead = note.fret < 0 || note.techniques.dead === true;
     const isOpen = note.fret === 0 && !isDead;
 
+    // Open strings are told apart by their colour alone — the inner keyline
+    // they used to carry was extra ink saying nothing the colour didn't.
     ctx.fillStyle = isOpen ? theme.fingers.open : isDead ? theme.dead : fingerColor(theme, note.finger);
     ctx.fillRect(cell.x, top, cell.w, pillH);
-
-    if (isOpen) {
-      const inset = this.px(6);
-      ctx.strokeStyle = pillTextFor(theme, 'open');
-      ctx.lineWidth = this.px(2);
-      ctx.strokeRect(cell.x + inset, top + inset, cell.w - inset * 2, pillH - inset * 2);
-    }
   }
 
   /**
@@ -646,7 +743,9 @@ export class HighwayView {
         ctx.stroke();
         ctx.restore();
       } else {
-        const minNumberWidth = this.px(theme.geometry.runCellNumberMinWidth);
+        // The number is fitted to the cell, so it only has to be dropped when
+        // the cell is too narrow for even a shrunken digit to be read.
+        const minNumberWidth = this.px(theme.geometry.runCellNumberMinWidth) * 0.7;
         if (cell.w >= minNumberWidth) {
           const label = String(note.fret);
           const size = this.fittedFontSize(label, this.fretSize(), cell.w * 0.78, theme.geometry.fretWeight);
@@ -676,7 +775,7 @@ export class HighwayView {
     if (note.techniques.slideIn && index === 0) {
       this.drawSlideTail(cell, centerY, note.techniques.slideIn, 'in', Number.POSITIVE_INFINITY);
     }
-    if (note.techniques.slideOut && index === run.cells.length - 1) {
+    if (note.techniques.slideOut && index === run.cells.length - 1 && !run.linkedSlide) {
       this.drawSlideTail(cell, centerY, note.techniques.slideOut, 'out', run.gapAfter);
     }
 
@@ -709,20 +808,73 @@ export class HighwayView {
    * drew for everything. Cream, not the finger colour — on a lane of
    * four hues a technique mark has to read as a mark, not as another note.
    */
-  /** The slanted seam between two notes of a run that are joined by a slide. */
-  private drawSlideSeam(x: number, centerY: number, pillH: number, direction: 'up' | 'down'): void {
+  /**
+   * Opens a gap between a note and the note it slides to, taking the space
+   * from both pills, and reports where the connecting slash should go. A
+   * leaning seam inside one capsule did not read as a slide at all — two
+   * pills with a line travelling between them does.
+   */
+  private carveSlideGaps(runs: Run[]): SlideLink[] {
+    const links: SlideLink[] = [];
+    const want = this.px(this.theme.geometry.slideGap);
+    for (let i = 0; i < runs.length - 1; i++) {
+      const from = runs[i];
+      const to = runs[i + 1];
+      const lastCell = from.cells[from.cells.length - 1];
+      const direction = lastCell.note.techniques.slideOut;
+      if (!direction) continue;
+      // Only a note that is genuinely next door is the slide's destination;
+      // anything further away is a slide out into silence, drawn as a tail.
+      if (to.x - (from.x + from.w) > want * 3) continue;
+
+      const have = to.x - (from.x + from.w);
+      if (have < want) {
+        // Never shrink a pill past the width its fret number needs. A note
+        // that slides in and straight out again is carved from both sides,
+        // and taking a fixed share each time squeezed it out of existence.
+        const floor = this.px(this.theme.geometry.runCellNumberMinWidth);
+        const need = want - have;
+        const takeFrom = Math.min(need / 2, Math.max(0, lastCell.w - floor));
+        const firstCell = to.cells[0];
+        const takeTo = Math.min(need - takeFrom, Math.max(0, firstCell.w - floor));
+        lastCell.w -= takeFrom;
+        from.w -= takeFrom;
+        firstCell.x += takeTo;
+        firstCell.w -= takeTo;
+        to.x += takeTo;
+        to.w -= takeTo;
+      }
+      links.push({ x0: from.x + from.w, x1: to.x, centerY: from.centerY, direction });
+      from.linkedSlide = true;
+    }
+    return links;
+  }
+
+  /** The slide itself: a slash climbing or falling across the gap between two pills. */
+  private drawSlideLink(link: SlideLink, pillH: number): void {
     const ctx = this.ctx;
     const theme = this.theme;
-    const dy = direction === 'up' ? -1 : 1;
-    const half = pillH / 2;
-    const lean = pillH * 0.34;
+    const dy = link.direction === 'up' ? -1 : 1;
+    const rise = pillH * 0.38;
+    const inset = (link.x1 - link.x0) * 0.06;
+    const x0 = link.x0 + inset;
+    const x1 = link.x1 - inset;
+    const y0 = link.centerY - dy * rise;
+    const y1 = link.centerY + dy * rise;
+
     ctx.save();
-    ctx.lineCap = 'butt';
-    ctx.strokeStyle = theme.techniqueStroke;
-    ctx.lineWidth = this.px(theme.geometry.slideTailWidth) * 0.7;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = theme.keyline;
+    ctx.lineWidth = this.px(theme.geometry.slideLinkWidth) + this.outlineWidth() * 2;
     ctx.beginPath();
-    ctx.moveTo(x - lean, centerY - dy * half);
-    ctx.lineTo(x + lean, centerY + dy * half);
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.strokeStyle = theme.techniqueStroke;
+    ctx.lineWidth = this.px(theme.geometry.slideLinkWidth);
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
     ctx.stroke();
     ctx.restore();
   }

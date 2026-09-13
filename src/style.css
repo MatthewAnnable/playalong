@@ -226,6 +226,11 @@
 
 .btn-amber {
   font-family: var(--ma-font-ui);
+  /* The label must never become a drag handle or a selection anchor: the
+     button itself has to be the only thing a press can land on. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
   font-weight: 700;
   font-size: 17px;
   min-height: var(--ma-tap-primary);
@@ -238,6 +243,10 @@
   box-shadow: var(--ma-shadow-amber);
   cursor: pointer;
   flex-shrink: 0;
+}
+
+#play-button > span {
+  pointer-events: none;
 }
 
 .btn-amber:hover {
@@ -774,7 +783,9 @@
 #app.presentation .alphatab-surface.is-horizontal {
   min-height: 0;
   height: 100vh;
-  padding-top: 12vh;
+  /* Bottom padding keeps the tab staff clear of the transport dock. */
+  padding: 6vh 0 168px;
+  box-sizing: border-box;
 }
 
 /* OBS browser source: the page itself must be transparent so the highway

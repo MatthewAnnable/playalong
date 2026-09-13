@@ -1,4 +1,5 @@
 import { model } from '@coderline/alphatab';
+import { nameChord } from './chords';
 
 export interface NoteEvent {
   startTick: number;
@@ -11,6 +12,8 @@ export interface NoteEvent {
   string: number;
   /** -1 for rests/dead notes. */
   fret: number;
+  /** Sounding MIDI pitch, tuning and capo included — used to name chords. */
+  pitch: number;
   finger: 0 | 1 | 2 | 3 | 4;
   fingerSource: 'gp' | 'guess' | 'override';
   techniques: {
@@ -31,6 +34,11 @@ export interface NoteEvent {
     tie?: boolean;
   };
   isChord: boolean;
+  /**
+   * The chord this beat spells, from the file if it names one and otherwise
+   * recognised from the shape. Present on every note of the beat.
+   */
+  chordName?: string;
 }
 
 export type SlideDirection = 'up' | 'down';
@@ -121,6 +129,44 @@ function bendFrets(note: model.Note): number | undefined {
   return quarterTones / 2;
 }
 
+/**
+ * What counts as a chord worth collapsing into one named pill. Three sounding
+ * strings spelling three *different* notes: that rules out the fifths and
+ * octaves a riff is built from — a dropped-D power chord across three strings
+ * is still two notes, and turning it into "D5" would hide the very thing a
+ * riff lesson is about.
+ */
+const MIN_CHORD_NOTES = 3;
+const MIN_CHORD_PITCH_CLASSES = 3;
+
+function chordNameFor(beat: model.Beat): string | undefined {
+  const sounding = beat.notes.filter((note) => !note.isDead && !note.isTieDestination);
+  if (sounding.length < MIN_CHORD_NOTES) return undefined;
+  const pitches = sounding.map((note) => note.realValue);
+  if (new Set(pitches.map((p) => ((p % 12) + 12) % 12)).size < MIN_CHORD_PITCH_CLASSES) return undefined;
+  const named = beat.chord?.name?.trim();
+  if (named) return named;
+  return nameChord(pitches) ?? undefined;
+}
+
+/**
+ * Whether the file itself names chords on this track. That is the signal that
+ * a song is a chord song: on one, the chord pills are what you want to read,
+ * and on a riff song they would bury the frets under jazz names.
+ */
+export function trackNamesChords(track: model.Track): boolean {
+  for (const staff of track.staves) {
+    for (const bar of staff.bars) {
+      for (const voice of bar.voices) {
+        for (const beat of voice.beats) {
+          if (beat.chord?.name?.trim()) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 /** Flattens one track's notation into a flat, time-sorted array of NoteEvents. */
 export function extractNotes(track: model.Track): NoteEvent[] {
   const events: NoteEvent[] = [];
@@ -138,6 +184,7 @@ export function extractNotes(track: model.Track): NoteEvent[] {
       const startTick = beat.absolutePlaybackStart;
       const endTick = startTick + beat.playbackDuration;
       const isChord = beat.notes.length > 1;
+      const chordName = chordNameFor(beat);
 
       for (const note of beat.notes) {
         // A tied note doesn't get its own pill — it just extends the
@@ -166,6 +213,7 @@ export function extractNotes(track: model.Track): NoteEvent[] {
           beatIndex,
           string: stringCount - note.string + 1,
           fret: note.isDead ? -1 : note.fret,
+          pitch: note.realValue,
           finger: gpFinger ?? 0,
           fingerSource: gpFinger !== null ? 'gp' : 'guess',
           techniques: {
@@ -184,6 +232,7 @@ export function extractNotes(track: model.Track): NoteEvent[] {
             tie: note.isTieDestination || undefined,
           },
           isChord,
+          chordName,
         };
         events.push(event);
         eventByNote.set(note, event);

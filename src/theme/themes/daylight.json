@@ -45,6 +45,7 @@
     "open": "#2E2A28"
   },
 
+  "chordPill": "#E8DFCF",
   "dead": "#6E6B67",
   "hit": "#2E2A28",
   "chordJoin": "#2E2A28",
@@ -79,6 +80,8 @@
     "hammerArcWidth": 4,
     "hammerArcRise": 28,
     "slideTailWidth": 9,
+    "slideGap": 30,
+    "slideLinkWidth": 10,
     "slideTailAngle": -34,
     "bendStemWidth": 9,
     "bendRise": 46,

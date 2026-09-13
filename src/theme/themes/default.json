@@ -42,6 +42,7 @@
     "4": "oklch(0.775 0.135 352)"
   },
 
+  "chordPill": "#E8DFCF",
   "dead": "#B0A9A0",
   "hit": "#FFF2CA",
   "chordJoin": "#FBF8F3",
@@ -76,6 +77,8 @@
     "hammerArcWidth": 4,
     "hammerArcRise": 28,
     "slideTailWidth": 9,
+    "slideGap": 30,
+    "slideLinkWidth": 10,
     "slideTailAngle": -34,
     "bendStemWidth": 9,
     "bendRise": 46,
