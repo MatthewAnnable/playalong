@@ -95,6 +95,12 @@ export function setHighwayView(visible: boolean): void {
   }
 }
 
+function resizeStage(): void {
+  if (!showingHighway || !view) return;
+  view.resize();
+  view.setPxPerTick(computePxPerTick());
+}
+
 export function initHighway(): void {
   onStateChange((state) => {
     if (view) {
@@ -126,11 +132,13 @@ export function initHighway(): void {
     ensureView().setChordPills(chordNamesToggle.checked);
   });
 
-  window.addEventListener('resize', () => {
-    if (!showingHighway || !view) return;
-    view.resize();
-    view.setPxPerTick(computePxPerTick());
-  });
+  window.addEventListener('resize', resizeStage);
+
+  // Presentation mode changes the stage's size without the window changing, so
+  // the canvas has to be told: until it was, the highway kept drawing into the
+  // backing store it had before, at the wrong scale.
+  const stageObserver = new ResizeObserver(() => resizeStage());
+  stageObserver.observe(canvas);
 
   registerAction('viewHighway', () => setHighwayView(true));
   registerAction('viewScore', () => setHighwayView(false));

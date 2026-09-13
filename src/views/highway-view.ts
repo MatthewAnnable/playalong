@@ -27,6 +27,13 @@ interface RunCell {
   w: number;
 }
 
+interface HammerLink {
+  x0: number;
+  x1: number;
+  centerY: number;
+  pull: boolean;
+}
+
 interface SlideLink {
   x0: number;
   x1: number;
@@ -406,8 +413,10 @@ export class HighwayView {
       const runs = this.buildRuns(laneNotes, mergeGap);
       this.padIsolatedRuns(runs);
       const slideLinks = this.carveSlideGaps(runs);
+      const hammerLinks = this.findHammerLinks(runs);
       for (const run of runs) this.drawRun(run, currentTick);
       for (const link of slideLinks) this.drawSlideLink(link, this.pillHeight());
+      for (const link of hammerLinks) this.drawHammerLink(link, this.pillHeight());
     }
 
     this.drawChordPills([...namedChords.values()]);
@@ -591,18 +600,16 @@ export class HighwayView {
       if (run.cells.length !== 1) continue;
       const cell = run.cells[0];
       if (cell.w >= minW) continue;
-      const want = (minW - cell.w) / 2;
-      const prev = runs[i - 1];
+      // Growth is always to the right. A pill's left edge is the moment the
+      // note is played, and widening leftwards made a note look like it
+      // started early — which on a play-along is the one thing that must
+      // never be wrong. Only the tail of a note is ours to negotiate with.
       const next = runs[i + 1];
-      const roomLeft = prev ? Math.max(0, run.x - (prev.x + prev.w) - gutter) : want;
-      const roomRight = next ? Math.max(0, next.x - (run.x + run.w) - gutter) : want;
-      const left = Math.min(want, roomLeft);
-      const right = Math.min(want, roomRight);
-      if (left <= 0 && right <= 0) continue;
-      cell.x -= left;
-      cell.w += left + right;
-      run.x = cell.x;
-      run.w = cell.w;
+      const room = next ? Math.max(0, next.x - (run.x + run.w) - gutter) : Number.POSITIVE_INFINITY;
+      const grow = Math.min(minW - cell.w, room);
+      if (grow <= 0) continue;
+      cell.w += grow;
+      run.w += grow;
     }
     for (let i = 0; i < runs.length; i++) {
       const next = runs[i + 1];
@@ -787,22 +794,6 @@ export class HighwayView {
       this.drawBend(cell, centerY, pillH, note.techniques.bendFrets);
     }
 
-    if (note.techniques.hammer || note.techniques.pull) {
-      ctx.save();
-      const rise = this.px(theme.geometry.hammerArcRise);
-      const x0 = cell.x + cell.w * 0.3;
-      const x1 = cell.x + cell.w * 0.7;
-      const y = centerY - pillH / 2;
-      ctx.strokeStyle = theme.techniqueStroke;
-      ctx.lineWidth = this.px(theme.geometry.hammerArcWidth);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(x0, y);
-      ctx.quadraticCurveTo((x0 + x1) / 2, y - rise, x1, y);
-      ctx.stroke();
-      ctx.restore();
-    }
-
     this.drawHitEffect(cell, centerY, pillH, currentTick);
   }
 
@@ -812,6 +803,68 @@ export class HighwayView {
    * drew for everything. Cream, not the finger colour — on a lane of
    * four hues a technique mark has to read as a mark, not as another note.
    */
+  /**
+   * A hammer-on or pull-off is two notes and one pick, so the mark has to
+   * join them. Drawn on top of the pills rather than per-note: an arc that
+   * sat over the first note alone said nothing about where the second one was.
+   */
+  private findHammerLinks(runs: Run[]): HammerLink[] {
+    const links: HammerLink[] = [];
+    const cells: { cell: RunCell; centerY: number }[] = [];
+    for (const run of runs) {
+      for (const cell of run.cells) cells.push({ cell, centerY: run.centerY });
+    }
+    for (let i = 0; i < cells.length - 1; i++) {
+      const note = cells[i].cell.note;
+      if (!note.techniques.hammer && !note.techniques.pull) continue;
+      const from = cells[i].cell;
+      const to = cells[i + 1].cell;
+      links.push({
+        x0: from.x + from.w / 2,
+        x1: to.x + to.w / 2,
+        centerY: cells[i].centerY,
+        pull: note.techniques.pull === true,
+      });
+    }
+    return links;
+  }
+
+  /** The arc over a hammer-on or pull-off pair, plus the H or P a tab would print. */
+  private drawHammerLink(link: HammerLink, pillH: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const rise = this.px(theme.geometry.hammerArcRise);
+    const y = link.centerY - pillH / 2 - this.px(theme.geometry.hammerArcGap);
+    const midX = (link.x0 + link.x1) / 2;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const pass of ['halo', 'ink'] as const) {
+      ctx.strokeStyle = pass === 'halo' ? theme.keyline : theme.techniqueStroke;
+      ctx.lineWidth =
+        this.px(theme.geometry.hammerArcWidth) + (pass === 'halo' ? this.outlineWidth() * 2 : 0);
+      ctx.beginPath();
+      ctx.moveTo(link.x0, y);
+      ctx.quadraticCurveTo(midX, y - rise * 2, link.x1, y);
+      ctx.stroke();
+    }
+
+    const label = link.pull ? 'P' : 'H';
+    const size = this.px(theme.geometry.hammerLabelSize);
+    ctx.font = `700 ${size}px Manrope, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = this.px(4);
+    ctx.strokeStyle = theme.keyline;
+    // The apex of the arc sits at y - rise; the letter clears it.
+    const labelY = y - rise - size * 0.72;
+    ctx.strokeText(label, midX, labelY);
+    ctx.fillStyle = theme.techniqueStroke;
+    ctx.fillText(label, midX, labelY);
+    ctx.restore();
+  }
+
   /**
    * Opens a gap between a note and the note it slides to, taking the space
    * from both pills, and reports where the connecting slash should go. A
@@ -833,20 +886,13 @@ export class HighwayView {
 
       const have = to.x - (from.x + from.w);
       if (have < want) {
-        // Never shrink a pill past the width its fret number needs. A note
-        // that slides in and straight out again is carved from both sides,
-        // and taking a fixed share each time squeezed it out of existence.
+        // The gap comes out of the end of the first note only. Moving the
+        // second note's left edge would put the arrival of the slide at the
+        // wrong time, and the arrival is the beat a player is listening for.
         const floor = this.minNumberWidth();
-        const need = want - have;
-        const takeFrom = Math.min(need / 2, Math.max(0, lastCell.w - floor));
-        const firstCell = to.cells[0];
-        const takeTo = Math.min(need - takeFrom, Math.max(0, firstCell.w - floor));
-        lastCell.w -= takeFrom;
-        from.w -= takeFrom;
-        firstCell.x += takeTo;
-        firstCell.w -= takeTo;
-        to.x += takeTo;
-        to.w -= takeTo;
+        const take = Math.min(want - have, Math.max(0, lastCell.w - floor));
+        lastCell.w -= take;
+        from.w -= take;
       }
       links.push({ x0: from.x + from.w, x1: to.x, centerY: from.centerY, direction });
       from.linkedSlide = true;

@@ -15,6 +15,9 @@ export interface ThemeGeometry {
   tieBarHeightRatio: number;
   hammerArcWidth: number;
   hammerArcRise: number;
+  /** Clearance between the top of the pill and the hammer-on arc. */
+  hammerArcGap: number;
+  hammerLabelSize: number;
   slideTailWidth: number;
   /** Clear space carved between a note and the note it slides to. */
   slideGap: number;

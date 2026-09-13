@@ -91,12 +91,36 @@ Seven items from Matthew's notes, all landed:
    "your browser blocked playback" overlay was appearing for any rejected
    `play()`, including the AbortError a seek causes.
 
+## Play-testing round 3 (2026-09-13)
+
+Play button confirmed fixed by Matthew. Three more from the same message:
+
+1. **A pill's left edge is now always the note's start time.** Gaps for a
+   slide come out of the end of the note before it, never the start of the
+   note after, and a short pill that needs widening grows rightwards only. It
+   used to grow both ways, which moved a note's apparent start earlier — on a
+   play-along that is the one thing that must never be wrong.
+2. **Hammer-ons and pull-offs link the two notes.** The arc used to sit on top
+   of the first note alone. It now spans from one pill to the next and carries
+   the H or P a tab would print.
+3. **The highway never resized when presentation mode did.** The canvas kept
+   its old backing store, so the stage drew at the wrong scale until the
+   window changed. A `ResizeObserver` on the canvas now handles it — found
+   while photographing the stage for the design hand-off, and it would have
+   been visible to Matthew as a soft, oddly-scaled highway in every lesson.
+
 ## Design hand-off (ready to send)
 
 `../playalong-design-handoff-2/` — same shape as the first one. Covers the
-technique marks and the new chord pills only, with five frames captured from
-the live renderer at 1440×900. The slide is the headline problem; the chord
-pill's styling is explicitly a placeholder.
+technique marks and the chord pills, with seven frames captured from the live
+renderer at 1440×900 (the hammer-on one is synthetic and says so — Freedom
+contains none).
+
+Three things are put to the designer: the slide, which is still the weakest
+mark at sixteenth-note spacing; Matthew's proposal to **invert what "joined"
+means** — separate ordinary consecutive pills and reserve a direct join for
+hammer-on and pull-off pairs, which is a change to how every note is drawn;
+and the chord pill's styling, which is explicitly a placeholder.
 
 ## Asked for, not built (waiting on Matthew)
 
