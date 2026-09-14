@@ -9,19 +9,27 @@ export interface ThemeGeometry {
   fretTracking: string;
   pxPerBeatRatio: number;
   runMergeGap: number;
-  runDividerWidth: number;
   runCellNumberMinWidth: number;
   deadWidthRatio: number;
+  /** Stage ground left between two consecutive notes that are picked separately. */
+  nickGap: number;
+  /** How much harder the corners curve where one pick joins two notes. */
+  camberRadiusRatio: number;
+  /** Clearance between the top of a pill and the marks drawn above it. */
+  markGap: number;
+  /** Vertical travel of the slide diagonal. */
+  markRise: number;
+  /** The P.M. rail: label size, rule weight, dash pattern, and the gap that splits one span from the next. */
+  pmLabelSize: number;
+  pmRuleWidth: number;
+  pmDashOn: number;
+  pmDashOff: number;
+  pmJoinGap: number;
   tieBarHeightRatio: number;
   hammerArcWidth: number;
   hammerArcRise: number;
-  /** Clearance between the top of the pill and the hammer-on arc. */
-  hammerArcGap: number;
   hammerLabelSize: number;
   slideTailWidth: number;
-  /** Clear space carved between a note and the note it slides to. */
-  slideGap: number;
-  slideLinkWidth: number;
   slideTailAngle: number;
   bendStemWidth: number;
   bendRise: number;
@@ -30,8 +38,6 @@ export interface ThemeGeometry {
   harmonicRotation: number;
   /** Diamond height as a multiple of pill height. */
   harmonicSizeRatio: number;
-  palmMuteRingWidth: number;
-  palmMuteRingOffset: number;
   chordJoinWidth: number;
   hitScale: number;
   hitScaleMs: number;

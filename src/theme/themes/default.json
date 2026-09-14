@@ -1,33 +1,27 @@
 {
   "name": "default",
-  "notes": "Play-Along stage theme. Colours only — geometry lives in the renderer. Lengths in this file are px at a 1080px-tall stage; scale linearly with stage height unless marked fixed.",
-
+  "notes": "Play-Along stage theme. Colours only \u2014 geometry lives in the renderer. Lengths in this file are px at a 1080px-tall stage; scale linearly with stage height unless marked fixed.",
   "stage": {
     "background": "#171B14",
     "backgroundImage": null,
     "backgroundOpacity": 1,
     "transparentInObs": true
   },
-
   "lane": "#83807A",
   "laneOpacity": 0.42,
   "barLine": "#83807A",
   "barLineOpacity": 0.85,
-
   "playLine": "#F7A630",
   "playLineWidth": 5,
   "playLineCapSize": 16,
   "playLinePosition": 0.22,
-
   "keyline": "#0D110B",
   "keylineWidth": 1.5,
   "keylineWidthObs": 2.5,
-
   "text": "#FBF8F3",
   "textMuted": "#A8A29A",
   "textEyebrow": "#A8C2A3",
   "pillText": "#2E2A28",
-
   "fingers": {
     "open": "#F4EFE7",
     "1": "#FFDE56",
@@ -41,15 +35,13 @@
     "3": "oklch(0.805 0.115 245)",
     "4": "oklch(0.775 0.135 352)"
   },
-
-  "chordPill": "#E8DFCF",
+  "chordPill": "#845B66",
   "dead": "#B0A9A0",
   "hit": "#FFF2CA",
   "chordJoin": "#FBF8F3",
   "chordJoinOpacity": 0.5,
   "techniqueStroke": "#FBF8F3",
   "palmMuteRing": "#EBE6DC",
-
   "obs": {
     "laneLight": "#EBE6DC",
     "laneLightOpacity": 0.75,
@@ -58,7 +50,6 @@
     "lineWidth": 2,
     "textShadow": "0 0 3px #0D110B, 0 1px 2px #0D110B"
   },
-
   "geometry": {
     "headerHeight": 96,
     "laneHeightFormula": "(stageHeight - headerHeight) / laneCount",
@@ -70,25 +61,19 @@
     "fretTracking": "-0.02em",
     "pxPerBeatRatio": 0.278,
     "runMergeGap": 8,
-    "runDividerWidth": 3,
     "runCellNumberMinWidth": 56,
     "deadWidthRatio": 0.75,
     "tieBarHeightRatio": 0.375,
     "hammerArcWidth": 7,
     "hammerArcRise": 22,
-    "hammerArcGap": 10,
     "hammerLabelSize": 30,
     "slideTailWidth": 9,
-    "slideGap": 64,
-    "slideLinkWidth": 12,
     "slideTailAngle": -34,
     "bendStemWidth": 9,
     "bendRise": 46,
     "bendLabelSize": 26,
     "harmonicRotation": 45,
     "harmonicSizeRatio": 1.18,
-    "palmMuteRingWidth": 5,
-    "palmMuteRingOffset": 7,
     "chordJoinWidth": 10,
     "hitScale": 1.06,
     "hitScaleMs": 90,
@@ -96,6 +81,18 @@
     "hitRingGrow": 10,
     "hitRingMs": 140,
     "playedOpacity": 0.4,
-    "playedFadeMs": 200
+    "playedFadeMs": 200,
+    "nickGap": 7,
+    "camberRadiusRatio": 1.7,
+    "markGap": 12,
+    "markRise": 30,
+    "pmLabelSize": 22,
+    "pmRuleWidth": 3,
+    "pmDashOn": 9,
+    "pmDashOff": 7,
+    "pmJoinGap": 60
+  },
+  "pillTextOverrides": {
+    "chord": "#FBF8F3"
   }
 }

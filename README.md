@@ -24,13 +24,32 @@ Press `Escape` to come back.
 Drag the progress bar and the score and the highway follow your thumb, so you
 can see where you are about to land before you let go.
 
+## How the highway shows joins
+
+Notes on the same string sit apart when they are apart in time. Two notes
+played one after another have a thin nick of stage between them, so a run can
+be counted. Two notes played with **one pick** — a hammer-on, a pull-off or a
+legato slide — are drawn touching, with the corners curving in where they
+meet, and the mark above the lane says which gesture it is: a curve with an H
+or a P for hammer-ons and pull-offs, a straight diagonal leaning the way the
+finger travels for a slide.
+
+The touching pair still shows two clearly separate pills. That matters because
+a slide is played with one finger, so both notes carry the same colour — a 1
+sliding to a 2 must never read as "12".
+
+Palm muting is marked the way tab marks it: **P.M.** with a dashed rule across
+the top of the stage showing how far it lasts.
+
 ## Chord names
 
 When a song's chords are written into the Guitar Pro file, the highway shows
 each one as a single pill across the strings — "G", "Am7", "Dsus4" — instead
 of a fret number per string. Where the file doesn't name a chord, the app
-works it out from the shape. **Chord names** in the top rail turns it off and
-on; it starts on for a song with chords written in, and off for a riff song.
+works it out from the shape. Chords are drawn in their own colour — a plum that belongs to no finger,
+because a chord is every finger at once. **Chord names** in the top rail turns
+it off and on; it starts on for a song with chords written in, and off for a
+riff song.
 
 Two-note shapes are never collapsed. A power chord spread over three strings
 is still two notes, and "D5" in place of the frets would hide the riff.

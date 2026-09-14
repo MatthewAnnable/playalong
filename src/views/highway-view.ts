@@ -12,44 +12,33 @@ export interface HighwayViewOptions {
 
 const STAGE_BASELINE_HEIGHT = 1080;
 
-interface LaidOutNote {
+/**
+ * How one note joins the next on the same string.
+ *
+ * - `none` — they are separate in time.
+ * - `nick`  — consecutive, but picked one at a time: a sliver of stage ground
+ *   between them, so a run can be counted.
+ * - `touch` — one pick for both notes (hammer-on, pull-off, legato slide).
+ *   The pills meet, and each keeps its full corner curve so the join pinches
+ *   in and stays legible as two notes: a slide is made with one finger, so
+ *   both pills carry the same colour, and 1 sliding to 2 must never read
+ *   as "12".
+ */
+type Join = 'none' | 'nick' | 'touch';
+
+interface Placed {
   note: NoteEvent;
-  /** x/w of the note's own musical duration, unpadded. */
+  /** Rendered rect. x is always the note's true start — only w is negotiable. */
   x: number;
   w: number;
   centerY: number;
+  joinNext: Join;
+  joinPrev: Join;
 }
 
-interface RunCell {
-  note: NoteEvent;
-  /** Rendered rect for this cell — padded to the minimum width when isolated. */
-  x: number;
-  w: number;
-}
-
-interface HammerLink {
-  x0: number;
-  x1: number;
-  centerY: number;
-  pull: boolean;
-}
-
-interface SlideLink {
-  x0: number;
-  x1: number;
-  centerY: number;
-  direction: 'up' | 'down';
-}
-
-interface Run {
-  cells: RunCell[];
-  /** True when this run's last note slides into the next run, which draws the mark instead. */
-  linkedSlide?: boolean;
-  centerY: number;
-  x: number;
-  w: number;
-  /** Free space before the next run in this lane — a trailing slide tail is clamped to it. */
-  gapAfter: number;
+interface Span {
+  startX: number;
+  endX: number;
 }
 
 function fingerKey(finger: 0 | 1 | 2 | 3 | 4): 'open' | '1' | '2' | '3' | '4' {
@@ -63,15 +52,24 @@ function fingerKey(finger: 0 | 1 | 2 | 3 | 4): 'open' | '1' | '2' | '3' | '4' {
 function bendLabel(tones: number): string {
   const rounded = Math.round(tones * 2) / 2;
   if (rounded <= 0) return '';
-  if (rounded === 0.5) return '\u00BD';
+  if (rounded === 0.5) return '½';
   if (rounded === 1) return 'full';
-  if (rounded === 1.5) return '1\u00BD';
+  if (rounded === 1.5) return '1½';
   return String(rounded);
 }
 
 function fingerColor(theme: Theme, finger: 0 | 1 | 2 | 3 | 4): string {
   const key = fingerKey(finger);
   return key === 'open' ? theme.fingers.open : theme.fingers[key];
+}
+
+/** A note played with one pick together with the note after it. */
+function isOnePick(note: NoteEvent): boolean {
+  return (
+    note.techniques.hammer === true ||
+    note.techniques.pull === true ||
+    (note.techniques.slideOut !== undefined && note.techniques.slideLegato === true)
+  );
 }
 
 /**
@@ -93,7 +91,7 @@ export class HighwayView {
   private obsMode = false;
   private chordPills = true;
   private hitNoteIds = new Map<number, number>();
-  /** Last frame's laid-out run cells, so a click can be mapped back to a note. */
+  /** Last frame's laid-out pills, so a click can be mapped back to a note. */
   private lastLayout: { note: NoteEvent; x: number; w: number; centerY: number; h: number }[] = [];
 
   constructor(options: HighwayViewOptions) {
@@ -189,13 +187,18 @@ export class HighwayView {
     return this.pillHeight() * this.theme.geometry.pillRadiusRatio;
   }
 
-  /** Narrowest a pill may be and still carry a readable (shrunken) fret number. */
-  private minNumberWidth(): number {
-    return this.px(this.theme.geometry.runCellNumberMinWidth) * 0.7;
+  /** The deeper curve on the corners where two notes of one pick meet. */
+  private camberRadius(): number {
+    return Math.min(this.pillRadius() * this.theme.geometry.camberRadiusRatio, this.pillHeight() / 2);
   }
 
   private minIsolatedWidth(): number {
     return this.pillHeight() * this.theme.geometry.pillMinWidthRatio;
+  }
+
+  /** Narrowest a pill may be and still carry a readable (shrunken) fret number. */
+  private minNumberWidth(): number {
+    return this.px(this.theme.geometry.runCellNumberMinWidth) * 0.7;
   }
 
   private fretSize(): number {
@@ -366,10 +369,11 @@ export class HighwayView {
     const rightEdgeTick = currentTick + (width - this.playLineX()) / this.pxPerTick + 2000;
     const startIndex = this.firstVisibleIndex(currentTick - 2000);
 
-    const byLane = new Map<number, LaidOutNote[]>();
-    const chordGroups = new Map<number, LaidOutNote[]>();
-    const namedChords = new Map<number, LaidOutNote[]>();
-    const tieNotes: LaidOutNote[] = [];
+    const byLane = new Map<number, Placed[]>();
+    const chordGroups = new Map<number, Placed[]>();
+    const namedChords = new Map<number, Placed[]>();
+    const tieNotes: Placed[] = [];
+    const muted: Span[] = [];
 
     for (let i = startIndex; i < this.notes.length; i++) {
       const note = this.notes[i];
@@ -382,7 +386,16 @@ export class HighwayView {
       const laneIndex = note.string - 1;
       if (laneIndex < 0 || laneIndex >= this.laneCount) continue;
 
-      const item: LaidOutNote = { note, x, w, centerY: this.laneCenterY(laneIndex) };
+      const item: Placed = {
+        note,
+        x,
+        w,
+        centerY: this.laneCenterY(laneIndex),
+        joinNext: 'none',
+        joinPrev: 'none',
+      };
+
+      if (note.techniques.palmMute) muted.push({ startX: x, endX: this.xForTick(note.endTick, currentTick) });
 
       // A named chord is drawn once, across the strings — its notes never
       // reach the per-lane layout at all.
@@ -402,50 +415,365 @@ export class HighwayView {
       if (note.tieBarStartTick !== undefined) tieNotes.push(item);
     }
 
+    this.drawPalmMuteRail(muted);
+
     // Chord joins first, so they sit behind the pills rather than over them.
     this.drawChordJoins(chordGroups);
 
-    const mergeGap = this.px(this.theme.geometry.runMergeGap);
     this.lastLayout = [];
 
     for (const [, laneNotes] of byLane) {
       laneNotes.sort((a, b) => a.x - b.x);
-      const runs = this.buildRuns(laneNotes, mergeGap);
-      this.padIsolatedRuns(runs);
-      const slideLinks = this.carveSlideGaps(runs);
-      const hammerLinks = this.findHammerLinks(runs);
-      for (const run of runs) this.drawRun(run, currentTick);
-      for (const link of slideLinks) this.drawSlideLink(link, this.pillHeight());
-      for (const link of hammerLinks) this.drawHammerLink(link, this.pillHeight());
+      this.layoutLane(laneNotes);
+      for (const item of laneNotes) this.drawPill(item);
+      for (const item of laneNotes) this.drawMarks(item, currentTick);
     }
 
     this.drawChordPills([...namedChords.values()]);
-
     this.drawTieBars(tieNotes, currentTick);
   }
 
-  /** The tied portion of a sustained note — no number, just a thin continuing bar. */
-  private drawTieBars(tieNotes: LaidOutNote[], currentTick: number): void {
+  /**
+   * Decides how each note joins the next and trims tails accordingly. A pill's
+   * left edge is the moment its note sounds and is never moved: every gap is
+   * taken out of the end of the note before it.
+   */
+  private layoutLane(laneNotes: Placed[]): void {
+    const mergeGap = this.px(this.theme.geometry.runMergeGap);
+    const nick = this.px(this.theme.geometry.nickGap);
+    const floor = this.minNumberWidth();
+
+    for (let i = 0; i < laneNotes.length - 1; i++) {
+      const a = laneNotes[i];
+      const b = laneNotes[i + 1];
+      const gap = b.x - (a.x + a.w);
+      if (gap >= mergeGap) continue;
+      const join: Join = isOnePick(a.note) ? 'touch' : 'nick';
+      a.joinNext = join;
+      b.joinPrev = join;
+      if (join === 'touch') {
+        // Exactly touching, so the two curves pinch against each other.
+        a.w = Math.max(b.x - a.x, floor);
+      } else {
+        a.w = Math.max(b.x - a.x - nick, floor);
+      }
+    }
+
+    // A short note is widened to stay readable — rightwards only, and never
+    // into the note after it.
+    const minW = this.minIsolatedWidth();
+    for (let i = 0; i < laneNotes.length; i++) {
+      const item = laneNotes[i];
+      if (item.joinNext !== 'none' || item.w >= minW) continue;
+      const next = laneNotes[i + 1];
+      const room = next ? Math.max(0, next.x - (item.x + item.w) - nick) : Number.POSITIVE_INFINITY;
+      item.w += Math.min(minW - item.w, room);
+    }
+  }
+
+  private drawPill(item: Placed): void {
     const ctx = this.ctx;
     const theme = this.theme;
-    const barH = this.pillHeight() * theme.geometry.tieBarHeightRatio;
-    for (const item of tieNotes) {
-      const note = item.note;
-      const barStartX = item.x + item.w;
-      const barEndX = this.xForTick(note.endTick, currentTick);
-      if (barEndX <= barStartX) continue;
-      ctx.fillStyle = fingerColor(theme, note.finger);
-      this.roundRectPath(barStartX, item.centerY - barH / 2, barEndX - barStartX, barH, barH / 2);
-      ctx.fill();
+    const note = item.note;
+    const pillH = this.pillHeight();
+    const top = item.centerY - pillH / 2;
+    const isDead = note.fret < 0 || note.techniques.dead === true;
+    const isOpen = note.fret === 0 && !isDead;
+
+    if (note.techniques.harmonic) {
+      this.drawHarmonic(item);
+      this.lastLayout.push({ note, x: item.x, w: item.w, centerY: item.centerY, h: pillH });
+      return;
+    }
+
+    // The corners where one pick joins two notes curve harder, so the join
+    // pinches and the pair never reads as a single number.
+    const r = this.pillRadius();
+    const camber = this.camberRadius();
+    const left = item.joinPrev === 'touch' ? camber : r;
+    const right = item.joinNext === 'touch' ? camber : r;
+
+    ctx.save();
+    this.roundRectPath(item.x, top, item.w, pillH, left, right, right, left);
+    ctx.fillStyle = isOpen ? theme.fingers.open : isDead ? theme.dead : fingerColor(theme, note.finger);
+    ctx.fill();
+    ctx.strokeStyle = theme.keyline;
+    ctx.lineWidth = this.outlineWidth();
+    ctx.stroke();
+    ctx.restore();
+
+    const key = isOpen ? 'open' : isDead ? 'dead' : fingerKey(note.finger);
+    const ink = pillTextFor(theme, key);
+
+    if (isDead) {
+      // Strokes rather than a glyph: a scratch cell is narrower than its
+      // duration, and a text × at pill size ran over its neighbours.
+      const arm = Math.min(item.w, pillH) * 0.26;
+      const cx = item.x + item.w / 2;
+      ctx.save();
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = Math.max(this.px(3), arm * 0.32);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx - arm, item.centerY - arm);
+      ctx.lineTo(cx + arm, item.centerY + arm);
+      ctx.moveTo(cx + arm, item.centerY - arm);
+      ctx.lineTo(cx - arm, item.centerY + arm);
+      ctx.stroke();
+      ctx.restore();
+    } else if (item.w >= this.minNumberWidth()) {
+      const label = String(note.fret);
+      const size = this.fittedFontSize(label, this.fretSize(), item.w * 0.78, theme.geometry.fretWeight);
+      ctx.font = `${theme.geometry.fretWeight} ${size}px Manrope, sans-serif`;
+      ctx.fillStyle = ink;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, item.x + item.w / 2, item.centerY);
+    }
+
+    this.lastLayout.push({ note, x: item.x, w: item.w, centerY: item.centerY, h: pillH });
+  }
+
+  /**
+   * A harmonic is a diamond rather than a pill, sized from the lane like every
+   * other note, with the number fitted to the width across its waist.
+   */
+  private drawHarmonic(item: Placed): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const pillH = this.pillHeight();
+    const half = (pillH / 2) * theme.geometry.harmonicSizeRatio;
+    const side = half * Math.SQRT1_2 * 2;
+    const cx = item.x + item.w / 2;
+
+    ctx.save();
+    ctx.translate(cx, item.centerY);
+    ctx.rotate((theme.geometry.harmonicRotation * Math.PI) / 180);
+    ctx.fillStyle = fingerColor(theme, item.note.finger);
+    const r = this.px(4);
+    this.roundRectPath(-side / 2, -side / 2, side, side, r, r, r, r);
+    ctx.fill();
+    ctx.strokeStyle = theme.keyline;
+    ctx.lineWidth = this.outlineWidth();
+    ctx.stroke();
+    ctx.restore();
+
+    const label = String(item.note.fret);
+    const preferred = this.fretSize() * 0.82;
+    const size = this.fittedFontSize(label, preferred, Math.max(half * 2 - preferred, this.px(12)), 700);
+    ctx.font = `700 ${size}px Manrope, sans-serif`;
+    ctx.fillStyle = pillTextFor(theme, fingerKey(item.note.finger));
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, item.centerY);
+  }
+
+  // ---- marks above the lane ----------------------------------------
+
+  /**
+   * Every technique mark is drawn in the clear space above the pill rather
+   * than in the note's own width — a mark that eats width makes the note that
+   * begins the gesture the least readable thing on the lane.
+   */
+  private drawMarks(item: Placed, currentTick: number): void {
+    const note = item.note;
+    const pillH = this.pillHeight();
+
+    if (note.techniques.slideIn) this.drawSlideMark(item, note.techniques.slideIn, 'in');
+    if (note.techniques.slideOut) this.drawSlideMark(item, note.techniques.slideOut, 'out');
+    if (note.techniques.hammer || note.techniques.pull) {
+      this.drawHammerMark(item, note.techniques.pull === true);
+    }
+    if (note.techniques.bend) this.drawBend(item, pillH, note.techniques.bendFrets);
+
+    this.drawHitEffect(item, pillH, currentTick);
+  }
+
+  /** Clear space between the top of a pill and the lane line above it. */
+  private markBaseY(item: Placed): number {
+    return item.centerY - this.pillHeight() / 2 - this.px(this.theme.geometry.markGap);
+  }
+
+  private strokeWithHalo(path: () => void, width: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = this.theme.keyline;
+    ctx.lineWidth = width + this.outlineWidth() * 2.5;
+    path();
+    ctx.stroke();
+    ctx.strokeStyle = this.theme.techniqueStroke;
+    ctx.lineWidth = width;
+    path();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private label(text: string, x: number, y: number, size: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = `700 ${size}px Manrope, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = this.px(5);
+    ctx.strokeStyle = this.theme.keyline;
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = this.theme.techniqueStroke;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  /**
+   * The slide: a straight diagonal above the notes, leaning the way the finger
+   * travels. Where the slide is one pick the two pills already touch, so the
+   * mark spans them; a slide out into silence trails off instead.
+   */
+  private drawSlideMark(item: Placed, direction: 'up' | 'down', side: 'in' | 'out'): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const rise = this.px(theme.geometry.markRise);
+    const y = this.markBaseY(item);
+    const dy = direction === 'up' ? -1 : 1;
+
+    let x0: number;
+    let x1: number;
+    if (side === 'out' && item.joinNext !== 'none') {
+      // Spans this note and the one it slides into.
+      const inset = item.w * 0.3;
+      x0 = item.x + inset;
+      x1 = item.x + item.w + inset;
+    } else if (side === 'out') {
+      x0 = item.x + item.w * 0.5;
+      x1 = item.x + item.w + this.px(theme.geometry.slideTailWidth) * 3;
+    } else {
+      x0 = item.x - this.px(theme.geometry.slideTailWidth) * 3;
+      x1 = item.x + item.w * 0.5;
+    }
+
+    const y0 = y + (dy < 0 ? rise / 2 : -rise / 2);
+    const y1 = y + (dy < 0 ? -rise / 2 : rise / 2);
+    this.strokeWithHalo(() => {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+    }, this.px(theme.geometry.slideTailWidth));
+  }
+
+  /** The arc over a hammer-on or pull-off pair, plus the H or P a tab would print. */
+  private drawHammerMark(item: Placed, pull: boolean): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const rise = this.px(theme.geometry.hammerArcRise);
+    const y = this.markBaseY(item);
+    const x0 = item.x + item.w * 0.3;
+    const x1 = item.joinNext !== 'none' ? item.x + item.w * 1.3 : item.x + item.w * 0.9;
+    const midX = (x0 + x1) / 2;
+
+    this.strokeWithHalo(() => {
+      ctx.beginPath();
+      ctx.moveTo(x0, y);
+      ctx.quadraticCurveTo(midX, y - rise * 2, x1, y);
+    }, this.px(theme.geometry.hammerArcWidth));
+
+    const size = this.px(theme.geometry.hammerLabelSize);
+    this.label(pull ? 'P' : 'H', midX, y - rise - size * 0.7, size);
+  }
+
+  /**
+   * Bends are drawn to size: the arrow is as tall as the bend is wide, and
+   * carries the player's own shorthand (½, full, 1½) so a half bend can never
+   * be mistaken for a whole-tone one.
+   */
+  private drawBend(item: Placed, pillH: number, frets: number | undefined): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    // A one-fret push is half a tone. With no bend points in the file we can
+    // only say "there is a bend" — draw the common full-tone arrow and leave
+    // the label off rather than claim a depth we do not know.
+    const tones = frets !== undefined && frets > 0 ? frets / 2 : 1;
+    const rise = Math.min(this.px(theme.geometry.bendRise) * tones, pillH * 2.4);
+    const x0 = item.x + item.w / 2;
+    const y0 = this.markBaseY(item);
+    const stem = this.px(theme.geometry.bendStemWidth);
+    const aw = stem * 1.6;
+
+    this.strokeWithHalo(() => {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x0, y0 - rise);
+      ctx.moveTo(x0 - aw, y0 - rise + aw);
+      ctx.lineTo(x0, y0 - rise);
+      ctx.lineTo(x0 + aw, y0 - rise + aw);
+    }, stem);
+
+    if (frets !== undefined && frets > 0) {
+      const label = bendLabel(tones);
+      if (label) {
+        const size = this.px(theme.geometry.bendLabelSize);
+        this.label(label, x0 + aw * 2.4, y0 - rise + size * 0.2, size);
+      }
     }
   }
 
   /**
-   * One pill spanning the strings the chord is played on, carrying its name.
-   * Six fret numbers tell a student which frets to hold; "G" tells them what
-   * they are playing, which on a chord song is the thing worth reading.
+   * Palm muting is marked the way tab marks it — P.M. with a dashed rule
+   * showing how far it lasts — drawn once across the top of the stage rather
+   * than as a dotted outline inside every pill, which was invisible at any
+   * distance and fought the fret number.
    */
-  private drawChordPills(groups: LaidOutNote[][]): void {
+  private drawPalmMuteRail(spans: Span[]): void {
+    if (spans.length === 0) return;
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const merged: Span[] = [];
+    for (const span of [...spans].sort((a, b) => a.startX - b.startX)) {
+      const last = merged[merged.length - 1];
+      if (last && span.startX - last.endX < this.px(theme.geometry.pmJoinGap)) {
+        last.endX = Math.max(last.endX, span.endX);
+      } else {
+        merged.push({ ...span });
+      }
+    }
+
+    const size = this.px(theme.geometry.pmLabelSize);
+    const y = this.headerHeight() - size;
+    ctx.save();
+    for (const span of merged) {
+      ctx.font = `700 ${size}px Manrope, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = this.px(5);
+      ctx.strokeStyle = theme.keyline;
+      ctx.strokeText('P.M.', span.startX, y);
+      ctx.fillStyle = theme.palmMuteRing;
+      ctx.fillText('P.M.', span.startX, y);
+
+      const ruleStart = span.startX + ctx.measureText('P.M.').width + this.px(10);
+      if (span.endX <= ruleStart) continue;
+      ctx.setLineDash([this.px(theme.geometry.pmDashOn), this.px(theme.geometry.pmDashOff)]);
+      ctx.lineCap = 'round';
+      for (const pass of ['halo', 'ink'] as const) {
+        ctx.strokeStyle = pass === 'halo' ? theme.keyline : theme.palmMuteRing;
+        ctx.lineWidth =
+          this.px(theme.geometry.pmRuleWidth) + (pass === 'halo' ? this.outlineWidth() * 2.5 : 0);
+        ctx.beginPath();
+        ctx.moveTo(ruleStart, y);
+        ctx.lineTo(span.endX, y);
+        ctx.moveTo(span.endX, y);
+        ctx.lineTo(span.endX, y + size * 0.5);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  // ---- chords, ties, joins ----------------------------------------
+
+  private drawChordPills(groups: Placed[][]): void {
     const gutter = this.px(this.theme.geometry.runMergeGap);
     const laid = groups
       .map((group) => ({
@@ -456,49 +784,39 @@ export class HighwayView {
       .sort((a, b) => a.left - b.left);
 
     for (let i = 0; i < laid.length; i++) {
-      const limitLeft = i > 0 ? laid[i - 1].right + gutter : Number.NEGATIVE_INFINITY;
       const limitRight = i < laid.length - 1 ? laid[i + 1].left - gutter : Number.POSITIVE_INFINITY;
-      const drawn = this.drawChordPill(laid[i].group, laid[i].left, laid[i].right, limitLeft, limitRight);
-      laid[i].right = drawn;
+      this.drawChordPill(laid[i].group, laid[i].left, laid[i].right, limitRight);
     }
   }
 
   /**
-   * One pill spanning the strings the chord is played on, carrying its name.
+   * One block spanning the strings the chord is played on, carrying its name.
    * Six fret numbers tell a student which frets to hold; "G" tells them what
-   * they are playing, which on a chord song is the thing worth reading.
-   *
-   * @returns the right edge actually drawn, so the next chord can keep clear of it.
+   * they are playing, which on a chord song is the thing worth reading. Its
+   * own colour, because a chord is every finger at once and none of the four
+   * finger hues can stand for it.
    */
-  private drawChordPill(
-    group: LaidOutNote[],
-    left: number,
-    right: number,
-    limitLeft: number,
-    limitRight: number,
-  ): number {
+  private drawChordPill(group: Placed[], left: number, right: number, limitRight: number): void {
     const ctx = this.ctx;
     const theme = this.theme;
     const name = group[0].note.chordName ?? '';
     const pillH = this.pillHeight();
-    const radius = this.pillRadius();
-    const musicalW = right - left;
+    const musicalW = Math.max(right - left, this.minIsolatedWidth() * 0.6);
 
-    // A chord name is several characters where a fret number is one or two, so
-    // the pill may grow to fit its name — but never into the next chord.
-    const nameSize = this.fretSize() * 0.8;
-    ctx.font = `${theme.geometry.fretWeight} ${nameSize}px Manrope, sans-serif`;
-    const wanted = Math.min(ctx.measureText(name).width + nameSize, musicalW * 2);
-    const grow = Math.max(0, wanted - musicalW) / 2;
-    const x = Math.max(left - grow, limitLeft);
-    const w = Math.max(Math.min(right + grow, limitRight) - x, this.minIsolatedWidth() * 0.6);
+    // The block is exactly as wide as the chord is long — it never grows to
+    // fit its name. Growing it ran the block over the notes that follow, and
+    // gave neighbouring chords different type sizes depending on the room
+    // each happened to have. A long name on a short chord shrinks instead.
+    const nameSize = this.fretSize() * 0.9;
+    const w = Math.min(musicalW, Math.max(limitRight - left, this.minIsolatedWidth() * 0.6));
 
     const top = Math.min(...group.map((item) => item.centerY)) - pillH / 2;
     const bottom = Math.max(...group.map((item) => item.centerY)) + pillH / 2;
+    const r = this.pillRadius();
 
     ctx.save();
+    this.roundRectPath(left, top, w, bottom - top, r, r, r, r);
     ctx.fillStyle = theme.chordPill;
-    this.roundRectPath(x, top, w, bottom - top, radius);
     ctx.fill();
     ctx.strokeStyle = theme.keyline;
     ctx.lineWidth = this.outlineWidth();
@@ -509,16 +827,31 @@ export class HighwayView {
     ctx.fillStyle = pillTextFor(theme, 'chord');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(name, x + w / 2, (top + bottom) / 2);
+    ctx.fillText(name, left + w / 2, (top + bottom) / 2);
     ctx.restore();
 
     for (const item of group) {
-      this.lastLayout.push({ note: item.note, x, w, centerY: item.centerY, h: pillH });
+      this.lastLayout.push({ note: item.note, x: left, w, centerY: item.centerY, h: pillH });
     }
-    return x + w;
   }
 
-  private drawChordJoins(chordGroups: Map<number, LaidOutNote[]>): void {
+  /** The tied portion of a sustained note — no number, just a thin continuing bar. */
+  private drawTieBars(tieNotes: Placed[], currentTick: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const barH = this.pillHeight() * theme.geometry.tieBarHeightRatio;
+    for (const item of tieNotes) {
+      const note = item.note;
+      const barStartX = item.x + item.w;
+      const barEndX = this.xForTick(note.endTick, currentTick);
+      if (barEndX <= barStartX) continue;
+      ctx.fillStyle = fingerColor(theme, note.finger);
+      this.roundRectPath(barStartX, item.centerY - barH / 2, barEndX - barStartX, barH, barH / 2, barH / 2, barH / 2, barH / 2);
+      ctx.fill();
+    }
+  }
+
+  private drawChordJoins(chordGroups: Map<number, Placed[]>): void {
     const ctx = this.ctx;
     const theme = this.theme;
     const joinW = this.px(theme.geometry.chordJoinWidth);
@@ -538,497 +871,15 @@ export class HighwayView {
     }
   }
 
-  /** Groups same-lane notes whose gap is below the merge threshold into run capsules. */
-  private buildRuns(laneNotes: LaidOutNote[], mergeGap: number): Run[] {
-    const runs: Run[] = [];
-    let current: LaidOutNote[] = [];
-
-    const flush = () => {
-      if (current.length === 0) return;
-      runs.push(this.layoutRun(current));
-      current = [];
-    };
-
-    for (const item of laneNotes) {
-      // Harmonics get their own diamond shape — never merge them into a run.
-      if (item.note.techniques.harmonic) {
-        flush();
-        runs.push(this.layoutRun([item]));
-        continue;
-      }
-      if (current.length === 0) {
-        current.push(item);
-        continue;
-      }
-      const prev = current[current.length - 1];
-      // A slide has to be seen travelling from one note to the next, so the
-      // two never share a capsule — they stay separate pills with the slide
-      // drawn in the space between them.
-      const gap = item.x - (prev.x + prev.w);
-      if (gap < mergeGap && !prev.note.techniques.slideOut && !item.note.techniques.slideIn) {
-        current.push(item);
-      } else {
-        flush();
-        current.push(item);
-      }
-    }
-    flush();
-
-    return runs;
-  }
-
-  private layoutRun(items: LaidOutNote[]): Run {
-    const cells: RunCell[] = items.map((item) => ({ note: item.note, x: item.x, w: item.w }));
-    const x = cells[0].x;
-    const last = cells[cells.length - 1];
-    const w = last.x + last.w - x;
-    return { cells, centerY: items[0].centerY, x, w, gapAfter: Number.POSITIVE_INFINITY };
-  }
-
-  /**
-   * A short note is widened to stay readable, but only into the space that is
-   * actually free. Widening blindly is what made a run of scratched (dead)
-   * notes sit on top of each other: they are drawn narrower than their
-   * duration, so every one of them wanted padding, and each one grew into its
-   * neighbour. Runs arrive sorted, so the previous run here is already padded.
-   */
-  private padIsolatedRuns(runs: Run[]): void {
-    const minW = this.minIsolatedWidth();
-    const gutter = this.px(this.theme.geometry.runMergeGap) / 2;
-    for (let i = 0; i < runs.length; i++) {
-      const run = runs[i];
-      if (run.cells.length !== 1) continue;
-      const cell = run.cells[0];
-      if (cell.w >= minW) continue;
-      // Growth is always to the right. A pill's left edge is the moment the
-      // note is played, and widening leftwards made a note look like it
-      // started early — which on a play-along is the one thing that must
-      // never be wrong. Only the tail of a note is ours to negotiate with.
-      const next = runs[i + 1];
-      const room = next ? Math.max(0, next.x - (run.x + run.w) - gutter) : Number.POSITIVE_INFINITY;
-      const grow = Math.min(minW - cell.w, room);
-      if (grow <= 0) continue;
-      cell.w += grow;
-      run.w += grow;
-    }
-    for (let i = 0; i < runs.length; i++) {
-      const next = runs[i + 1];
-      runs[i].gapAfter = next ? Math.max(0, next.x - (runs[i].x + runs[i].w)) : Number.POSITIVE_INFINITY;
-    }
-  }
-
-  /** Shrinks a label until it fits the width it has, so a number never spills onto its neighbour. */
-  private fittedFontSize(text: string, preferred: number, maxWidth: number, weight: number): number {
-    const ctx = this.ctx;
-    ctx.font = `${weight} ${preferred}px Manrope, sans-serif`;
-    const width = ctx.measureText(text).width;
-    if (width <= maxWidth || width === 0) return preferred;
-    return Math.max(preferred * 0.45, preferred * (maxWidth / width));
-  }
-
-  private drawRun(run: Run, currentTick: number): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    const pillH = this.pillHeight();
-    const radius = this.pillRadius();
-    const top = run.centerY - pillH / 2;
-    const singleHarmonic = run.cells.length === 1 && run.cells[0].note.techniques.harmonic;
-
-    if (singleHarmonic) {
-      this.drawHarmonicCell(run.cells[0], run.centerY);
-    } else {
-      ctx.save();
-      this.roundRectPath(run.x, top, run.w, pillH, radius);
-      ctx.clip();
-      for (const cell of run.cells) this.fillCell(cell, top, pillH);
-      ctx.restore();
-
-      // Dividers between cells, then the single outer keyline.
-      if (run.cells.length > 1) {
-        const dividerW = this.px(theme.geometry.runDividerWidth);
-        ctx.strokeStyle = this.obsMode ? theme.keyline : theme.stage.background;
-        ctx.lineWidth = dividerW;
-        for (let i = 1; i < run.cells.length; i++) {
-          const bx = run.cells[i].x;
-          ctx.beginPath();
-          ctx.moveTo(bx, top);
-          ctx.lineTo(bx, top + pillH);
-          ctx.stroke();
-        }
-      }
-
-      ctx.save();
-      this.roundRectPath(run.x, top, run.w, pillH, radius);
-      ctx.strokeStyle = theme.keyline;
-      ctx.lineWidth = this.outlineWidth();
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // Per-cell overlays: technique glyphs, numbers, hit flash, tie bars.
-    run.cells.forEach((cell, index) => this.drawCellOverlays(cell, run, index, pillH, currentTick));
-
-    // Record layout for click-to-correct-fingering, using cell rects.
-    for (const cell of run.cells) {
-      this.lastLayout.push({ note: cell.note, x: cell.x, w: cell.w, centerY: run.centerY, h: pillH });
-    }
-  }
-
-  private fillCell(cell: RunCell, top: number, pillH: number): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    const note = cell.note;
-    const isDead = note.fret < 0 || note.techniques.dead === true;
-    const isOpen = note.fret === 0 && !isDead;
-
-    // Open strings are told apart by their colour alone — the inner keyline
-    // they used to carry was extra ink saying nothing the colour didn't.
-    ctx.fillStyle = isOpen ? theme.fingers.open : isDead ? theme.dead : fingerColor(theme, note.finger);
-    ctx.fillRect(cell.x, top, cell.w, pillH);
-  }
-
-  /**
-   * A harmonic is a diamond rather than a pill. The diamond is sized from the
-   * lane like every other note — it used to be a fixed 34px square carrying a
-   * 46px number, so the fret simply did not fit inside it — and the number is
-   * then shrunk to the width actually available across the diamond's waist.
-   */
-  private drawHarmonicCell(cell: RunCell, centerY: number): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    const pillH = this.pillHeight();
-    // Half-diagonal: the diamond's full height, so it reads as the same weight
-    // as the pills on the lanes above and below it.
-    const half = (pillH / 2) * theme.geometry.harmonicSizeRatio;
-    const side = half * Math.SQRT1_2 * 2;
-    const cx = cell.x + cell.w / 2;
-
-    ctx.save();
-    ctx.translate(cx, centerY);
-    ctx.rotate((theme.geometry.harmonicRotation * Math.PI) / 180);
-    ctx.fillStyle = fingerColor(theme, cell.note.finger);
-    this.roundRectPath(-side / 2, -side / 2, side, side, this.px(4));
-    ctx.fill();
-    ctx.strokeStyle = theme.keyline;
-    ctx.lineWidth = this.outlineWidth();
-    ctx.stroke();
-    ctx.restore();
-
-    // Number stays upright — drawn without the rotation transform. The widest
-    // line that fits inside a diamond of half-diagonal h, at text height t, is
-    // 2h - t, so fit to that rather than to the bounding box.
-    const label = String(cell.note.fret);
-    const preferred = this.fretSize() * 0.82;
-    const size = this.fittedFontSize(label, preferred, Math.max(half * 2 - preferred, this.px(12)), 700);
-    ctx.font = `700 ${size}px Manrope, sans-serif`;
-    ctx.fillStyle = pillTextFor(theme, fingerKey(cell.note.finger));
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, cx, centerY);
-  }
-
-  private drawCellOverlays(cell: RunCell, run: Run, index: number, pillH: number, currentTick: number): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    const centerY = run.centerY;
-    const note = cell.note;
-    const isDead = note.fret < 0 || note.techniques.dead === true;
-    const isOpen = note.fret === 0 && !isDead;
-
-    if (!note.techniques.harmonic) {
-      const key = isOpen ? 'open' : isDead ? 'dead' : fingerKey(note.finger);
-      const ink = pillTextFor(theme, key);
-      if (isDead) {
-        // Drawn as strokes rather than a glyph: a scratch cell is narrower
-        // than its duration, and a text × at pill size ran over its neighbours.
-        const arm = Math.min(cell.w, pillH) * 0.26;
-        const cx = cell.x + cell.w / 2;
-        ctx.save();
-        ctx.strokeStyle = ink;
-        ctx.lineWidth = Math.max(this.px(3), arm * 0.32);
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(cx - arm, centerY - arm);
-        ctx.lineTo(cx + arm, centerY + arm);
-        ctx.moveTo(cx + arm, centerY - arm);
-        ctx.lineTo(cx - arm, centerY + arm);
-        ctx.stroke();
-        ctx.restore();
-      } else {
-        // The number is fitted to the cell, so it only has to be dropped when
-        // the cell is too narrow for even a shrunken digit to be read.
-        if (cell.w >= this.minNumberWidth()) {
-          const label = String(note.fret);
-          const size = this.fittedFontSize(label, this.fretSize(), cell.w * 0.78, theme.geometry.fretWeight);
-          ctx.font = `${theme.geometry.fretWeight} ${size}px Manrope, sans-serif`;
-          ctx.fillStyle = ink;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(label, cell.x + cell.w / 2, centerY);
-        }
-      }
-    }
-
-    if (note.techniques.palmMute) {
-      ctx.save();
-      const offset = this.px(theme.geometry.palmMuteRingOffset);
-      ctx.setLineDash([this.px(1), this.px(5)]);
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = theme.palmMuteRing;
-      ctx.lineWidth = this.px(theme.geometry.palmMuteRingWidth);
-      this.roundRectPath(cell.x + offset, centerY - pillH / 2 + offset, cell.w - offset * 2, pillH - offset * 2, this.pillRadius() * 0.6);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // A slide inside a run is drawn as the slanted seam between the two cells
-    // (see drawRun); only the run's outer edges get a trailing tail.
-    if (note.techniques.slideIn && index === 0) {
-      this.drawSlideTail(cell, centerY, note.techniques.slideIn, 'in', Number.POSITIVE_INFINITY);
-    }
-    if (note.techniques.slideOut && index === run.cells.length - 1 && !run.linkedSlide) {
-      this.drawSlideTail(cell, centerY, note.techniques.slideOut, 'out', run.gapAfter);
-    }
-
-    if (note.techniques.bend) {
-      this.drawBend(cell, centerY, pillH, note.techniques.bendFrets);
-    }
-
-    this.drawHitEffect(cell, centerY, pillH, currentTick);
-  }
-
-  /**
-   * The tail that says which way the finger travels. It follows the score:
-   * a slide down draws a falling tail, never the rising one the first build
-   * drew for everything. Cream, not the finger colour — on a lane of
-   * four hues a technique mark has to read as a mark, not as another note.
-   */
-  /**
-   * A hammer-on or pull-off is two notes and one pick, so the mark has to
-   * join them. Drawn on top of the pills rather than per-note: an arc that
-   * sat over the first note alone said nothing about where the second one was.
-   */
-  private findHammerLinks(runs: Run[]): HammerLink[] {
-    const links: HammerLink[] = [];
-    const cells: { cell: RunCell; centerY: number }[] = [];
-    for (const run of runs) {
-      for (const cell of run.cells) cells.push({ cell, centerY: run.centerY });
-    }
-    for (let i = 0; i < cells.length - 1; i++) {
-      const note = cells[i].cell.note;
-      if (!note.techniques.hammer && !note.techniques.pull) continue;
-      const from = cells[i].cell;
-      const to = cells[i + 1].cell;
-      links.push({
-        x0: from.x + from.w / 2,
-        x1: to.x + to.w / 2,
-        centerY: cells[i].centerY,
-        pull: note.techniques.pull === true,
-      });
-    }
-    return links;
-  }
-
-  /** The arc over a hammer-on or pull-off pair, plus the H or P a tab would print. */
-  private drawHammerLink(link: HammerLink, pillH: number): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    const rise = this.px(theme.geometry.hammerArcRise);
-    const y = link.centerY - pillH / 2 - this.px(theme.geometry.hammerArcGap);
-    const midX = (link.x0 + link.x1) / 2;
-
-    ctx.save();
-    ctx.lineCap = 'round';
-    for (const pass of ['halo', 'ink'] as const) {
-      ctx.strokeStyle = pass === 'halo' ? theme.keyline : theme.techniqueStroke;
-      ctx.lineWidth =
-        this.px(theme.geometry.hammerArcWidth) + (pass === 'halo' ? this.outlineWidth() * 2 : 0);
-      ctx.beginPath();
-      ctx.moveTo(link.x0, y);
-      ctx.quadraticCurveTo(midX, y - rise * 2, link.x1, y);
-      ctx.stroke();
-    }
-
-    const label = link.pull ? 'P' : 'H';
-    const size = this.px(theme.geometry.hammerLabelSize);
-    ctx.font = `700 ${size}px Manrope, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = this.px(4);
-    ctx.strokeStyle = theme.keyline;
-    // The apex of the arc sits at y - rise; the letter clears it.
-    const labelY = y - rise - size * 0.72;
-    ctx.strokeText(label, midX, labelY);
-    ctx.fillStyle = theme.techniqueStroke;
-    ctx.fillText(label, midX, labelY);
-    ctx.restore();
-  }
-
-  /**
-   * Opens a gap between a note and the note it slides to, taking the space
-   * from both pills, and reports where the connecting slash should go. A
-   * leaning seam inside one capsule did not read as a slide at all — two
-   * pills with a line travelling between them does.
-   */
-  private carveSlideGaps(runs: Run[]): SlideLink[] {
-    const links: SlideLink[] = [];
-    const want = this.px(this.theme.geometry.slideGap);
-    for (let i = 0; i < runs.length - 1; i++) {
-      const from = runs[i];
-      const to = runs[i + 1];
-      const lastCell = from.cells[from.cells.length - 1];
-      const direction = lastCell.note.techniques.slideOut;
-      if (!direction) continue;
-      // Only a note that is genuinely next door is the slide's destination;
-      // anything further away is a slide out into silence, drawn as a tail.
-      if (to.x - (from.x + from.w) > want * 3) continue;
-
-      const have = to.x - (from.x + from.w);
-      if (have < want) {
-        // The gap comes out of the end of the first note only. Moving the
-        // second note's left edge would put the arrival of the slide at the
-        // wrong time, and the arrival is the beat a player is listening for.
-        const floor = this.minNumberWidth();
-        const take = Math.min(want - have, Math.max(0, lastCell.w - floor));
-        lastCell.w -= take;
-        from.w -= take;
-      }
-      links.push({ x0: from.x + from.w, x1: to.x, centerY: from.centerY, direction });
-      from.linkedSlide = true;
-    }
-    return links;
-  }
-
-  /** The slide itself: a slash climbing or falling across the gap between two pills. */
-  private drawSlideLink(link: SlideLink, pillH: number): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    const dy = link.direction === 'up' ? -1 : 1;
-    const rise = pillH * 0.38;
-    const inset = (link.x1 - link.x0) * 0.06;
-    const x0 = link.x0 + inset;
-    const x1 = link.x1 - inset;
-    const y0 = link.centerY - dy * rise;
-    const y1 = link.centerY + dy * rise;
-
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = theme.keyline;
-    ctx.lineWidth = this.px(theme.geometry.slideLinkWidth) + this.outlineWidth() * 2;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.strokeStyle = theme.techniqueStroke;
-    ctx.lineWidth = this.px(theme.geometry.slideLinkWidth);
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private drawSlideTail(
-    cell: RunCell,
-    centerY: number,
-    direction: 'up' | 'down',
-    side: 'in' | 'out',
-    room: number,
-  ): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    const base = this.px(theme.geometry.slideTailWidth) * 6;
-    // Never reach into the next note: a tail that overlapped its neighbour was
-    // the other half of why these marks did not read.
-    const len = Math.max(this.px(theme.geometry.slideTailWidth) * 2, Math.min(base, room * 0.85));
-    const angle = (Math.abs(theme.geometry.slideTailAngle) * Math.PI) / 180;
-    const dx = side === 'out' ? 1 : -1;
-    // Canvas y grows downwards. A slide out ascends away from the pill; a
-    // slide in ascends towards it, so its tail drops away to the left.
-    const rising = side === 'out' ? direction === 'up' : direction === 'down';
-    const dy = rising ? -1 : 1;
-
-    const x0 = side === 'out' ? cell.x + cell.w : cell.x;
-    const y0 = centerY;
-    const x1 = x0 + dx * len * Math.cos(angle);
-    const y1 = y0 + dy * len * Math.sin(angle);
-
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = theme.keyline;
-    ctx.lineWidth = this.px(theme.geometry.slideTailWidth) + this.outlineWidth() * 2;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.strokeStyle = theme.techniqueStroke;
-    ctx.lineWidth = this.px(theme.geometry.slideTailWidth);
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  /**
-   * Bends are drawn to size: the arrow is as tall as the bend is wide, and
-   * carries the player's own shorthand (½, full, 1½) so a half bend can never
-   * be mistaken for a whole-tone one.
-   */
-  private drawBend(cell: RunCell, centerY: number, pillH: number, frets: number | undefined): void {
-    const ctx = this.ctx;
-    const theme = this.theme;
-    // A one-fret push is half a tone. With no bend points in the file we can
-    // only say "there is a bend" — draw the common full-tone arrow and leave
-    // the label off rather than claim a depth we do not know.
-    const tones = frets !== undefined && frets > 0 ? frets / 2 : 1;
-    const rise = Math.min(this.px(theme.geometry.bendRise) * tones, pillH * 2.4);
-    const x0 = cell.x + cell.w / 2;
-    const y0 = centerY - pillH / 2;
-    const stem = this.px(theme.geometry.bendStemWidth);
-
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    // Dark halo first, so the arrow stays visible over a pale pill.
-    for (const pass of ['halo', 'ink'] as const) {
-      ctx.strokeStyle = pass === 'halo' ? theme.keyline : theme.techniqueStroke;
-      ctx.lineWidth = pass === 'halo' ? stem + this.outlineWidth() * 2 : stem;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x0, y0 - rise);
-      ctx.stroke();
-      const aw = stem * 1.6;
-      ctx.beginPath();
-      ctx.moveTo(x0 - aw, y0 - rise + aw);
-      ctx.lineTo(x0, y0 - rise);
-      ctx.lineTo(x0 + aw, y0 - rise + aw);
-      ctx.stroke();
-    }
-
-    const label = frets !== undefined && frets > 0 ? bendLabel(tones) : '';
-    if (label) {
-      const size = this.px(theme.geometry.bendLabelSize);
-      ctx.font = `700 ${size}px Manrope, sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.lineWidth = this.px(4);
-      ctx.strokeStyle = theme.keyline;
-      ctx.strokeText(label, x0 + stem * 2, y0 - rise + size * 0.15);
-      ctx.fillStyle = theme.techniqueStroke;
-      ctx.fillText(label, x0 + stem * 2, y0 - rise + size * 0.15);
-    }
-    ctx.restore();
-  }
+  // ---- hit flash, hit testing, primitives ---------------------------
 
   private hitStartAt(note: NoteEvent): number | undefined {
     const id = note.startTick * 100 + note.string;
     return this.hitNoteIds.get(id);
   }
 
-  private drawHitEffect(cell: RunCell, centerY: number, pillH: number, currentTick: number): void {
-    const note = cell.note;
+  private drawHitEffect(item: Placed, pillH: number, currentTick: number): void {
+    const note = item.note;
     const theme = this.theme;
     const ringMs = theme.geometry.hitRingMs;
     const isHitNow = note.startTick <= currentTick && currentTick - note.startTick < theme.geometry.hitScaleMs;
@@ -1044,11 +895,12 @@ export class HighwayView {
     const progress = elapsed / ringMs;
     const ctx = this.ctx;
     const grow = this.px(theme.geometry.hitRingGrow) * progress;
+    const r = this.pillRadius();
     ctx.save();
     ctx.globalAlpha = 1 - progress;
     ctx.strokeStyle = theme.hit;
     ctx.lineWidth = this.px(theme.geometry.hitRingWidth);
-    this.roundRectPath(cell.x - grow / 2, centerY - pillH / 2 - grow / 2, cell.w + grow, pillH + grow, this.pillRadius());
+    this.roundRectPath(item.x - grow / 2, item.centerY - pillH / 2 - grow / 2, item.w + grow, pillH + grow, r, r, r, r);
     ctx.stroke();
     ctx.restore();
   }
@@ -1066,15 +918,32 @@ export class HighwayView {
     return null;
   }
 
-  private roundRectPath(x: number, y: number, w: number, h: number, r: number): void {
+  /** Shrinks a label until it fits the width it has, so a number never spills onto its neighbour. */
+  private fittedFontSize(text: string, preferred: number, maxWidth: number, weight: number): number {
     const ctx = this.ctx;
-    const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+    ctx.font = `${weight} ${preferred}px Manrope, sans-serif`;
+    const width = ctx.measureText(text).width;
+    if (width <= maxWidth || width === 0) return preferred;
+    return Math.max(preferred * 0.3, preferred * (maxWidth / width));
+  }
+
+  private roundRectPath(x: number, y: number, w: number, h: number, tl: number, tr: number, br: number, bl: number): void {
+    const ctx = this.ctx;
+    const cap = Math.min(w, h) / 2;
+    const rtl = Math.max(0, Math.min(tl, cap));
+    const rtr = Math.max(0, Math.min(tr, cap));
+    const rbr = Math.max(0, Math.min(br, cap));
+    const rbl = Math.max(0, Math.min(bl, cap));
     ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rr);
-    ctx.arcTo(x + w, y + h, x, y + h, rr);
-    ctx.arcTo(x, y + h, x, y, rr);
-    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.moveTo(x + rtl, y);
+    ctx.lineTo(x + w - rtr, y);
+    ctx.arcTo(x + w, y, x + w, y + rtr, rtr);
+    ctx.lineTo(x + w, y + h - rbr);
+    ctx.arcTo(x + w, y + h, x + w - rbr, y + h, rbr);
+    ctx.lineTo(x + rbl, y + h);
+    ctx.arcTo(x, y + h, x, y + h - rbl, rbl);
+    ctx.lineTo(x, y + rtl);
+    ctx.arcTo(x, y, x + rtl, y, rtl);
     ctx.closePath();
   }
 
@@ -1082,5 +951,4 @@ export class HighwayView {
     const id = note.startTick * 100 + note.string;
     if (!this.hitNoteIds.has(id)) this.hitNoteIds.set(id, performance.now());
   }
-
 }

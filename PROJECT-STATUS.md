@@ -109,6 +109,47 @@ Play button confirmed fixed by Matthew. Three more from the same message:
    while photographing the stage for the design hand-off, and it would have
    been visible to Matthew as a soft, oddly-scaled highway in every lesson.
 
+## Built from the design canvas (2026-09-13)
+
+Matthew picked the directions and asked for one change to the join language,
+which turned out to be the important one.
+
+**The join language, with his camber.** The highway no longer merges a run of
+notes into one subdivided capsule. Every note is its own pill, and how it
+meets the next one carries meaning:
+
+- apart in time → a real gap
+- consecutive, picked one at a time → a 7px nick of stage ground
+- **one pick for both notes** (hammer-on, pull-off, legato slide) → the pills
+  touch, and the corners where they meet curve *harder* than the outer ones,
+  so the join pinches to a waist
+
+That last point is Matthew's, and it is what makes the scheme work: a slide is
+played with one finger, so both pills are the same colour, and the canvas's
+single-outline join would have made 1 sliding to 2 read as "12". The camber
+keeps them legible as two notes while still saying they are one gesture.
+`camberRadiusRatio` in the theme sets how hard.
+
+**Everything else from the canvas**, as recommended there:
+
+- The slide mark moved into the clear lane above the pills, spanning the two
+  notes, leaning up or down. No note pays width for it any more.
+- Hammer-ons and pull-offs keep the arc and the H / P, also above the lane.
+- Palm mute is now tab's **P.M.** plus a dashed rule across the top of the
+  stage, replacing the dotted outline inside each pill.
+
+**Chords: Option A, not the canvas's recommendation.** Matthew chose the
+filled block. It is no longer cream — that was always a placeholder — but the
+brand plum lifted for a dark stage (`#845B66`, cream ink at 5.4:1), a fifth
+hue belonging to no finger. The block is exactly as wide as the chord is long
+and never grows to fit its name: growing it ran the block over the notes after
+it and gave neighbouring chords different type sizes. A long name on a short
+chord shrinks instead.
+
+The canvas still shows the superseded chord recommendation (Option B) and the
+single-outline join. It is the design record, not the spec — the code above is
+what ships.
+
 ## Design hand-off (sent)
 
 Claude Design's answer is a canvas at

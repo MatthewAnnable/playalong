@@ -1,33 +1,27 @@
 {
   "name": "daylight",
-  "notes": "Light stage for bright rooms and iPad practice in sunlight. Same four hues as `default`, same finger-to-hue mapping — only the lightness inverts, so the colour a student learned in a lesson still means the same finger. Not for OBS: use `default` there.",
-
+  "notes": "Light stage for bright rooms and iPad practice in sunlight. Same four hues as `default`, same finger-to-hue mapping \u2014 only the lightness inverts, so the colour a student learned in a lesson still means the same finger. Not for OBS: use `default` there.",
   "stage": {
     "background": "#F5F3EF",
     "backgroundImage": null,
     "backgroundOpacity": 1,
     "transparentInObs": false
   },
-
   "lane": "#7E7A72",
   "laneOpacity": 0.42,
   "barLine": "#7E7A72",
   "barLineOpacity": 0.85,
-
   "playLine": "#BB5D00",
   "playLineWidth": 5,
   "playLineCapSize": 16,
   "playLinePosition": 0.22,
-
   "keyline": "#FBF8F3",
   "keylineWidth": 2,
   "keylineWidthObs": 2,
-
   "text": "#2E2A28",
   "textMuted": "#6A625C",
   "textEyebrow": "#4C6D47",
   "pillText": "#FBF8F3",
-
   "fingers": {
     "open": "#FFFFFF",
     "1": "#684F00",
@@ -42,17 +36,16 @@
     "4": "oklch(0.545 0.165 352)"
   },
   "pillTextOverrides": {
-    "open": "#2E2A28"
+    "open": "#2E2A28",
+    "chord": "#FBF8F3"
   },
-
-  "chordPill": "#E8DFCF",
+  "chordPill": "#845B66",
   "dead": "#6E6B67",
   "hit": "#2E2A28",
   "chordJoin": "#2E2A28",
   "chordJoinOpacity": 0.45,
   "techniqueStroke": "#2E2A28",
   "palmMuteRing": "#6A625C",
-
   "obs": {
     "laneLight": "#FBF8F3",
     "laneLightOpacity": 0.8,
@@ -61,7 +54,6 @@
     "lineWidth": 2,
     "textShadow": "0 0 3px #FBF8F3, 0 1px 2px #FBF8F3"
   },
-
   "geometry": {
     "headerHeight": 96,
     "laneHeightFormula": "(stageHeight - headerHeight) / laneCount",
@@ -73,25 +65,19 @@
     "fretTracking": "-0.02em",
     "pxPerBeatRatio": 0.278,
     "runMergeGap": 8,
-    "runDividerWidth": 3,
     "runCellNumberMinWidth": 56,
     "deadWidthRatio": 0.75,
     "tieBarHeightRatio": 0.375,
     "hammerArcWidth": 7,
     "hammerArcRise": 22,
-    "hammerArcGap": 10,
     "hammerLabelSize": 30,
     "slideTailWidth": 9,
-    "slideGap": 64,
-    "slideLinkWidth": 12,
     "slideTailAngle": -34,
     "bendStemWidth": 9,
     "bendRise": 46,
     "bendLabelSize": 26,
     "harmonicRotation": 45,
     "harmonicSizeRatio": 1.18,
-    "palmMuteRingWidth": 5,
-    "palmMuteRingOffset": 7,
     "chordJoinWidth": 10,
     "hitScale": 1.06,
     "hitScaleMs": 90,
@@ -99,6 +85,15 @@
     "hitRingGrow": 10,
     "hitRingMs": 140,
     "playedOpacity": 0.4,
-    "playedFadeMs": 200
+    "playedFadeMs": 200,
+    "nickGap": 7,
+    "camberRadiusRatio": 1.7,
+    "markGap": 12,
+    "markRise": 30,
+    "pmLabelSize": 22,
+    "pmRuleWidth": 3,
+    "pmDashOn": 9,
+    "pmDashOff": 7,
+    "pmJoinGap": 60
   }
 }

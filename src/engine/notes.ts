@@ -22,6 +22,8 @@ export interface NoteEvent {
     slide?: boolean;
     /** Which way the slide leaves this note — tab draws a rising or falling tail, never both the same. */
     slideOut?: SlideDirection;
+    /** A legato slide is one pick for two notes; a shift slide is picked again. */
+    slideLegato?: boolean;
     /** Which way the slide arrives at this note, for a lead-in tail before the pill. */
     slideIn?: SlideDirection;
     bend?: boolean;
@@ -222,6 +224,7 @@ export function extractNotes(track: model.Track): NoteEvent[] {
             slide:
               note.slideInType !== model.SlideInType.None || note.slideOutType !== model.SlideOutType.None || undefined,
             slideOut: slideOutDirection(note),
+            slideLegato: note.slideOutType === model.SlideOutType.Legato || undefined,
             slideIn: slideInDirection(note),
             bend: note.hasBend || undefined,
             bendFrets: bendFrets(note),
