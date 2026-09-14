@@ -109,7 +109,32 @@ Play button confirmed fixed by Matthew. Three more from the same message:
    while photographing the stage for the design hand-off, and it would have
    been visible to Matthew as a soft, oddly-scaled highway in every lesson.
 
-## Design hand-off (ready to send)
+## Design hand-off (sent)
+
+Claude Design's answer is a canvas at
+https://claude.ai/code/artifact/4f9a7f8d-4f97-47f4-a4d8-fb2992449269 —
+five boards drawn at true size for a 1080px stage. Source for it lives in
+`../playalong-design-handoff-2/canvas/` (`.dc.html` per board plus
+`canvas.json`); re-seeding from those files is how it gets updated.
+
+What it proposes, none of it built yet:
+
+- **Flush means one pick.** Matthew's inversion, extended: a gap is separation
+  in time, a 7px nick is a run picked note by note, and a flush single-outline
+  pill is one hand gesture — hammer-on, pull-off *or* legato slide. The colour
+  still changes where the finger does, so the join costs no information. The
+  mark above the lane says which gesture.
+- **The slide moves above the lane.** Today's carved gap makes the *first*
+  note pay: at sixteenth spacing the 5 shrinks to its 39px floor and its
+  number from 56px to 30px. A diagonal in the lane's 34px top margin costs no
+  width at all.
+- **The chord pill becomes a band with its name at the attack edge** rather
+  than a filled block with the name floating in the middle — much less cream
+  on a dark stage, and the name stays horizontal and legible at any length.
+- **Palm mute becomes tab's P.M. plus a dashed rule** above the run; the
+  dotted outline inside each pill is invisible at distance.
+
+## Original hand-off brief (as sent)
 
 `../playalong-design-handoff-2/` — same shape as the first one. Covers the
 technique marks and the chord pills, with seven frames captured from the live
