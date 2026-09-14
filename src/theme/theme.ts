@@ -3,18 +3,14 @@ export interface ThemeGeometry {
   laneHeightFormula: string;
   pillHeightRatio: number;
   pillRadiusRatio: number;
-  pillMinWidthRatio: number;
   fretSizeRatio: number;
   fretWeight: number;
   fretTracking: string;
   pxPerBeatRatio: number;
   runMergeGap: number;
   runCellNumberMinWidth: number;
-  deadWidthRatio: number;
   /** Stage ground left between two consecutive notes that are picked separately. */
   nickGap: number;
-  /** How much harder the corners curve where one pick joins two notes. */
-  camberRadiusRatio: number;
   /** Clearance between the top of a pill and the marks drawn above it. */
   markGap: number;
   /** Vertical travel of the slide diagonal. */

@@ -8,6 +8,8 @@ export interface HighwayViewOptions {
   theme: Theme;
   pxPerTick: number;
   getTick: () => number;
+  /** Called after the stage changes size, so the owner can recompute px-per-tick. */
+  onResize?: () => void;
 }
 
 const STAGE_BASELINE_HEIGHT = 1080;
@@ -19,18 +21,21 @@ const STAGE_BASELINE_HEIGHT = 1080;
  * - `nick`  — consecutive, but picked one at a time: a sliver of stage ground
  *   between them, so a run can be counted.
  * - `touch` — one pick for both notes (hammer-on, pull-off, legato slide).
- *   The pills meet, and each keeps its full corner curve so the join pinches
- *   in and stays legible as two notes: a slide is made with one finger, so
- *   both pills carry the same colour, and 1 sliding to 2 must never read
+ *   The straight middle of each pill's edge is bridged, so the two are joined
+ *   through the centre while their corners keep exactly the curve every other
+ *   pill has. The corners must stay visible: a slide is made with one finger,
+ *   so both pills carry the same colour, and 1 sliding to 2 must never read
  *   as "12".
  */
 type Join = 'none' | 'nick' | 'touch';
 
 interface Placed {
   note: NoteEvent;
-  /** Rendered rect. x is always the note's true start — only w is negotiable. */
+  /** Rendered rect. x is the note's true start; w is its musical value, less the nick. */
   x: number;
   w: number;
+  /** The full width the note's duration occupies, nick included. */
+  pitchW: number;
   centerY: number;
   joinNext: Join;
   joinPrev: Join;
@@ -85,6 +90,7 @@ export class HighwayView {
   private theme: Theme;
   private pxPerTick: number;
   private getTick: () => number;
+  private onResize?: () => void;
   private notes: NoteEvent[] = [];
   private barMarkers: BarMarker[] = [];
   private rafId = 0;
@@ -103,6 +109,7 @@ export class HighwayView {
     this.theme = options.theme;
     this.pxPerTick = options.pxPerTick;
     this.getTick = options.getTick;
+    this.onResize = options.onResize;
     this.resize();
   }
 
@@ -187,15 +194,6 @@ export class HighwayView {
     return this.pillHeight() * this.theme.geometry.pillRadiusRatio;
   }
 
-  /** The deeper curve on the corners where two notes of one pick meet. */
-  private camberRadius(): number {
-    return Math.min(this.pillRadius() * this.theme.geometry.camberRadiusRatio, this.pillHeight() / 2);
-  }
-
-  private minIsolatedWidth(): number {
-    return this.pillHeight() * this.theme.geometry.pillMinWidthRatio;
-  }
-
   /** Narrowest a pill may be and still carry a readable (shrunken) fret number. */
   private minNumberWidth(): number {
     return this.px(this.theme.geometry.runCellNumberMinWidth) * 0.7;
@@ -231,7 +229,25 @@ export class HighwayView {
 
   // ---- frame ----------------------------------------------------
 
+  /**
+   * The stage changes size without the window doing so — entering presentation
+   * mode is the obvious case. Watching for it with an observer proved
+   * unreliable, and the cost of being wrong is the whole highway drawn at the
+   * wrong scale, so the size is simply checked on every frame instead.
+   */
+  private syncSize(): void {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.canvas.getBoundingClientRect();
+    const wantWidth = Math.round(rect.width * dpr);
+    const wantHeight = Math.round(rect.height * dpr);
+    if (this.canvas.width === wantWidth && this.canvas.height === wantHeight) return;
+    if (wantWidth === 0 || wantHeight === 0) return;
+    this.resize();
+    this.onResize?.();
+  }
+
   private renderFrame(): void {
+    this.syncSize();
     const { width, height } = this.canvas.getBoundingClientRect();
     const ctx = this.ctx;
     const currentTick = this.getTick();
@@ -357,12 +373,15 @@ export class HighwayView {
 
   // ---- notes ----------------------------------------------------
 
-  /** Pill width covers only the head of the note — a tie sustain renders as a separate bar. */
-  private noteWidth(note: NoteEvent): number {
+  /**
+   * The width a note's duration occupies. Nothing else is allowed to change
+   * it: two notes of the same musical value are always drawn the same length,
+   * or the highway starts telling you one of them is held longer than it is.
+   * A tie sustain continues past it as a separate bar.
+   */
+  private pitchWidth(note: NoteEvent): number {
     const headEndTick = note.tieBarStartTick ?? note.endTick;
-    const raw = Math.max((headEndTick - note.startTick) * this.pxPerTick, 1);
-    const isDead = note.fret < 0 || note.techniques.dead === true;
-    return isDead ? raw * this.theme.geometry.deadWidthRatio : raw;
+    return Math.max((headEndTick - note.startTick) * this.pxPerTick, 1);
   }
 
   private drawNotes(currentTick: number, width: number): void {
@@ -380,8 +399,11 @@ export class HighwayView {
       if (note.startTick > rightEdgeTick) break;
 
       const x = this.xForTick(note.startTick, currentTick);
-      const w = this.noteWidth(note);
-      if (x + w < 0 || x > width) continue;
+      const pitchW = this.pitchWidth(note);
+      // Every pill gives up the same nick from its tail, so notes never fuse
+      // and every note of a given value still comes out the same length.
+      const w = Math.max(pitchW - this.px(this.theme.geometry.nickGap), this.px(6));
+      if (x + pitchW < 0 || x > width) continue;
 
       const laneIndex = note.string - 1;
       if (laneIndex < 0 || laneIndex >= this.laneCount) continue;
@@ -390,6 +412,7 @@ export class HighwayView {
         note,
         x,
         w,
+        pitchW,
         centerY: this.laneCenterY(laneIndex),
         joinNext: 'none',
         joinPrev: 'none',
@@ -425,6 +448,7 @@ export class HighwayView {
     for (const [, laneNotes] of byLane) {
       laneNotes.sort((a, b) => a.x - b.x);
       this.layoutLane(laneNotes);
+      this.drawTouchBridges(laneNotes);
       for (const item of laneNotes) this.drawPill(item);
       for (const item of laneNotes) this.drawMarks(item, currentTick);
     }
@@ -434,40 +458,60 @@ export class HighwayView {
   }
 
   /**
-   * Decides how each note joins the next and trims tails accordingly. A pill's
-   * left edge is the moment its note sounds and is never moved: every gap is
-   * taken out of the end of the note before it.
+   * Decides how each note joins the next. It changes no widths: a pill is as
+   * long as its note and nothing else, so every sixteenth on the stage is the
+   * same length as every other sixteenth.
    */
   private layoutLane(laneNotes: Placed[]): void {
     const mergeGap = this.px(this.theme.geometry.runMergeGap);
-    const nick = this.px(this.theme.geometry.nickGap);
-    const floor = this.minNumberWidth();
-
     for (let i = 0; i < laneNotes.length - 1; i++) {
       const a = laneNotes[i];
       const b = laneNotes[i + 1];
-      const gap = b.x - (a.x + a.w);
-      if (gap >= mergeGap) continue;
+      if (b.x - (a.x + a.pitchW) >= mergeGap) continue;
       const join: Join = isOnePick(a.note) ? 'touch' : 'nick';
       a.joinNext = join;
       b.joinPrev = join;
-      if (join === 'touch') {
-        // Exactly touching, so the two curves pinch against each other.
-        a.w = Math.max(b.x - a.x, floor);
-      } else {
-        a.w = Math.max(b.x - a.x - nick, floor);
-      }
     }
+  }
 
-    // A short note is widened to stay readable — rightwards only, and never
-    // into the note after it.
-    const minW = this.minIsolatedWidth();
-    for (let i = 0; i < laneNotes.length; i++) {
-      const item = laneNotes[i];
-      if (item.joinNext !== 'none' || item.w >= minW) continue;
-      const next = laneNotes[i + 1];
-      const room = next ? Math.max(0, next.x - (item.x + item.w) - nick) : Number.POSITIVE_INFINITY;
-      item.w += Math.min(minW - item.w, room);
+  /**
+   * The bridge across the nick between two notes played with one pick. Only
+   * the straight middle of each pill's edge is joined, so the corners keep
+   * exactly the curve every other pill has and the pair still reads as two
+   * notes — which it must, since a slide is one finger and therefore one
+   * colour on both.
+   */
+  private drawTouchBridges(laneNotes: Placed[]): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const pillH = this.pillHeight();
+    const r = this.pillRadius();
+    const h = Math.max(pillH - r * 2, pillH * 0.2);
+
+    for (let i = 0; i < laneNotes.length - 1; i++) {
+      const a = laneNotes[i];
+      if (a.joinNext !== 'touch') continue;
+      const b = laneNotes[i + 1];
+      const x0 = a.x + a.w;
+      const x1 = b.x;
+      if (x1 <= x0) continue;
+      const top = a.centerY - h / 2;
+      const mid = (x0 + x1) / 2;
+
+      ctx.save();
+      ctx.fillStyle = fingerColor(theme, a.note.finger);
+      ctx.fillRect(x0 - 0.5, top, mid - x0 + 1, h);
+      ctx.fillStyle = fingerColor(theme, b.note.finger);
+      ctx.fillRect(mid, top, x1 - mid + 0.5, h);
+      ctx.strokeStyle = theme.keyline;
+      ctx.lineWidth = this.outlineWidth();
+      ctx.beginPath();
+      ctx.moveTo(x0, top);
+      ctx.lineTo(x1, top);
+      ctx.moveTo(x0, top + h);
+      ctx.lineTo(x1, top + h);
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -486,15 +530,12 @@ export class HighwayView {
       return;
     }
 
-    // The corners where one pick joins two notes curve harder, so the join
-    // pinches and the pair never reads as a single number.
+    // Every corner on every pill carries the same curve; a joined pair is
+    // told apart by its bridge, not by a different shape.
     const r = this.pillRadius();
-    const camber = this.camberRadius();
-    const left = item.joinPrev === 'touch' ? camber : r;
-    const right = item.joinNext === 'touch' ? camber : r;
 
     ctx.save();
-    this.roundRectPath(item.x, top, item.w, pillH, left, right, right, left);
+    this.roundRectPath(item.x, top, item.w, pillH, r, r, r, r);
     ctx.fillStyle = isOpen ? theme.fingers.open : isDead ? theme.dead : fingerColor(theme, note.finger);
     ctx.fill();
     ctx.strokeStyle = theme.keyline;
@@ -779,7 +820,7 @@ export class HighwayView {
       .map((group) => ({
         group,
         left: Math.min(...group.map((item) => item.x)),
-        right: Math.max(...group.map((item) => item.x + item.w)),
+        right: Math.max(...group.map((item) => item.x + item.pitchW)),
       }))
       .sort((a, b) => a.left - b.left);
 
@@ -801,14 +842,14 @@ export class HighwayView {
     const theme = this.theme;
     const name = group[0].note.chordName ?? '';
     const pillH = this.pillHeight();
-    const musicalW = Math.max(right - left, this.minIsolatedWidth() * 0.6);
+    const musicalW = Math.max(right - left - this.px(this.theme.geometry.nickGap), this.px(6));
 
     // The block is exactly as wide as the chord is long — it never grows to
     // fit its name. Growing it ran the block over the notes that follow, and
     // gave neighbouring chords different type sizes depending on the room
     // each happened to have. A long name on a short chord shrinks instead.
     const nameSize = this.fretSize() * 0.9;
-    const w = Math.min(musicalW, Math.max(limitRight - left, this.minIsolatedWidth() * 0.6));
+    const w = Math.min(musicalW, Math.max(limitRight - left, this.px(6)));
 
     const top = Math.min(...group.map((item) => item.centerY)) - pillH / 2;
     const bottom = Math.max(...group.map((item) => item.centerY)) + pillH / 2;

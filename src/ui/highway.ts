@@ -72,6 +72,7 @@ function ensureView(): HighwayView {
       theme: activeTheme,
       pxPerTick: computePxPerTick(),
       getTick: () => tickSource(),
+      onResize: () => view?.setPxPerTick(computePxPerTick()),
     });
     view.setChordPills(chordNamesToggle.checked);
     applyTheme(activeTheme);
@@ -133,12 +134,6 @@ export function initHighway(): void {
   });
 
   window.addEventListener('resize', resizeStage);
-
-  // Presentation mode changes the stage's size without the window changing, so
-  // the canvas has to be told: until it was, the highway kept drawing into the
-  // backing store it had before, at the wrong scale.
-  const stageObserver = new ResizeObserver(() => resizeStage());
-  stageObserver.observe(canvas);
 
   registerAction('viewHighway', () => setHighwayView(true));
   registerAction('viewScore', () => setHighwayView(false));

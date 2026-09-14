@@ -120,15 +120,22 @@ meets the next one carries meaning:
 
 - apart in time → a real gap
 - consecutive, picked one at a time → a 7px nick of stage ground
-- **one pick for both notes** (hammer-on, pull-off, legato slide) → the pills
-  touch, and the corners where they meet curve *harder* than the outer ones,
-  so the join pinches to a waist
+- **one pick for both notes** (hammer-on, pull-off, legato slide) → the
+  straight middle of each pill's edge is bridged, joining them through the
+  centre while every corner keeps exactly the curve every other pill has
 
 That last point is Matthew's, and it is what makes the scheme work: a slide is
 played with one finger, so both pills are the same colour, and the canvas's
-single-outline join would have made 1 sliding to 2 read as "12". The camber
-keeps them legible as two notes while still saying they are one gesture.
-`camberRadiusRatio` in the theme sets how hard.
+single-outline join would have made 1 sliding to 2 read as "12". A first
+attempt gave the meeting corners a deeper curve, which he rejected — the
+corners have to match every other pill, and only the centre may touch.
+
+**A pill's width is its note's value and nothing else.** Every modifier is
+gone: the minimum-width padding for short notes, the narrower dead note, the
+tail trimmed differently depending on the join. Each cost a note some width and
+made two notes of the same value look like different lengths, which reads as
+one being held longer. Now every note gives up the same nick from its tail and
+nothing else touches it, so all sixteenths match, all quarters match.
 
 **Everything else from the canvas**, as recommended there:
 

@@ -29,14 +29,19 @@ can see where you are about to land before you let go.
 Notes on the same string sit apart when they are apart in time. Two notes
 played one after another have a thin nick of stage between them, so a run can
 be counted. Two notes played with **one pick** — a hammer-on, a pull-off or a
-legato slide — are drawn touching, with the corners curving in where they
-meet, and the mark above the lane says which gesture it is: a curve with an H
+legato slide — are joined through the middle: the straight part of each pill's
+edge is bridged, while the corners keep exactly the curve every other pill has.
+The mark above the lane says which gesture it is: a curve with an H
 or a P for hammer-ons and pull-offs, a straight diagonal leaning the way the
 finger travels for a slide.
 
-The touching pair still shows two clearly separate pills. That matters because
+The joined pair still shows two clearly separate pills. That matters because
 a slide is played with one finger, so both notes carry the same colour — a 1
 sliding to a 2 must never read as "12".
+
+A pill is exactly as long as its note and nothing is allowed to change that:
+every sixteenth on the stage is the same length as every other sixteenth, so
+the highway never suggests one note is held longer than it is.
 
 Palm muting is marked the way tab marks it: **P.M.** with a dashed rule across
 the top of the stage showing how far it lasts.
