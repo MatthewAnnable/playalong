@@ -157,7 +157,21 @@ The canvas still shows the superseded chord recommendation (Option B) and the
 single-outline join. It is the design record, not the spec — the code above is
 what ships.
 
-## Design hand-off (sent)
+## Design hand-off 3 (ready to send)
+
+`../playalong-design-handoff-3/` — a review pass on the built stage rather
+than a fresh design. Five captures of the **live renderer** (not mock-ups),
+the current theme JSON, and the previous brief for context.
+
+It asks for four things to be looked at, in order: the **slide mark**, which
+is the weakest and reads as a chevron where two slides meet; the **join** at
+speed; the **chord block's plum** beside the four finger colours; and the
+**P.M. rail**, which is tab-correct in the header band but a long way from a
+bottom-string riff. It explicitly asks the designer not to redesign what is
+working, and states both non-negotiable rules — left edge is the note's start,
+and a pill's length is its note's value.
+
+## Design hand-off 2 (sent)
 
 Claude Design's answer is a canvas at
 https://claude.ai/code/artifact/4f9a7f8d-4f97-47f4-a4d8-fb2992449269 —
