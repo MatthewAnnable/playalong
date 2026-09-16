@@ -21,11 +21,12 @@ const STAGE_BASELINE_HEIGHT = 1080;
  * - `nick`  — consecutive, but picked one at a time: a sliver of stage ground
  *   between them, so a run can be counted.
  * - `touch` — one pick for both notes (hammer-on, pull-off, legato slide).
- *   The straight middle of each pill's edge is bridged, so the two are joined
- *   through the centre while their corners keep exactly the curve every other
- *   pill has. The corners must stay visible: a slide is made with one finger,
- *   so both pills carry the same colour, and 1 sliding to 2 must never read
- *   as "12".
+ *   The pills butt flush, full height, edge to edge — no bridge element.
+ *   Their own corner radii pinch the seam into two small notches, and the
+ *   pair is stroked once as the union of the two shapes, so no keyline
+ *   crosses the seam. The notches must stay visible: a slide is made with
+ *   one finger, so both pills carry the same colour, and 1 sliding to 2
+ *   must never read as "12".
  */
 type Join = 'none' | 'nick' | 'touch';
 
@@ -44,6 +45,7 @@ interface Placed {
 interface Span {
   startX: number;
   endX: number;
+  laneIndex: number;
 }
 
 function fingerKey(finger: 0 | 1 | 2 | 3 | 4): 'open' | '1' | '2' | '3' | '4' {
@@ -418,7 +420,9 @@ export class HighwayView {
         joinPrev: 'none',
       };
 
-      if (note.techniques.palmMute) muted.push({ startX: x, endX: this.xForTick(note.endTick, currentTick) });
+      if (note.techniques.palmMute) {
+        muted.push({ startX: x, endX: this.xForTick(note.endTick, currentTick), laneIndex });
+      }
 
       // A named chord is drawn once, across the strings — its notes never
       // reach the per-lane layout at all.
@@ -448,9 +452,9 @@ export class HighwayView {
     for (const [, laneNotes] of byLane) {
       laneNotes.sort((a, b) => a.x - b.x);
       this.layoutLane(laneNotes);
-      this.drawTouchBridges(laneNotes);
-      for (const item of laneNotes) this.drawPill(item);
-      for (const item of laneNotes) this.drawMarks(item, currentTick);
+      this.drawLegatoChains(laneNotes);
+      this.drawSlideRails(laneNotes);
+      for (let i = 0; i < laneNotes.length; i++) this.drawMarks(laneNotes[i], laneNotes[i + 1], currentTick);
     }
 
     this.drawChordPills([...namedChords.values()]);
@@ -475,44 +479,132 @@ export class HighwayView {
   }
 
   /**
-   * The bridge across the nick between two notes played with one pick. Only
-   * the straight middle of each pill's edge is joined, so the corners keep
-   * exactly the curve every other pill has and the pair still reads as two
-   * notes — which it must, since a slide is one finger and therefore one
-   * colour on both.
+   * Walks a lane's notes and draws each maximal run of `touch`-joined notes
+   * (hammer-on, pull-off, legato slide) as one union shape: every cell fills
+   * in its own finger colour and butts flush against its neighbour, then the
+   * merged silhouette is stroked exactly once. A chain of one is just an
+   * ordinary pill. Harmonics never join a chain — they keep their diamond.
    */
-  private drawTouchBridges(laneNotes: Placed[]): void {
+  private drawLegatoChains(laneNotes: Placed[]): void {
+    let i = 0;
+    while (i < laneNotes.length) {
+      let j = i;
+      while (
+        j + 1 < laneNotes.length &&
+        laneNotes[j].joinNext === 'touch' &&
+        !laneNotes[j].note.techniques.harmonic &&
+        !laneNotes[j + 1].note.techniques.harmonic
+      ) {
+        j++;
+      }
+      const chain = laneNotes.slice(i, j + 1);
+      if (chain.length === 1) this.drawPill(chain[0]);
+      else this.drawChain(chain);
+      i = j + 1;
+    }
+  }
+
+  /** Walks a lane's notes and draws one contour rail per maximal chain of slide-linked notes. */
+  private drawSlideRails(laneNotes: Placed[]): void {
+    let i = 0;
+    while (i < laneNotes.length) {
+      const note = laneNotes[i].note;
+      if (note.techniques.slideOut === undefined && note.techniques.slideIn === undefined) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j + 1 < laneNotes.length && laneNotes[j].note.techniques.slideOut !== undefined) j++;
+      this.drawSlideRail(laneNotes.slice(i, j + 1));
+      i = j + 1;
+    }
+  }
+
+  /**
+   * A legato chain of two or more notes. Each cell's *rendered* rect is
+   * widened only where it touches the next cell (flush, no gap, plus
+   * `legatoSeamOverlap` to kill the antialiasing hairline) — the note's own
+   * width, used for its fret number and for hit-testing, never changes.
+   */
+  private drawChain(chain: Placed[]): void {
     const ctx = this.ctx;
     const theme = this.theme;
     const pillH = this.pillHeight();
+    const top = chain[0].centerY - pillH / 2;
     const r = this.pillRadius();
-    const h = Math.max(pillH - r * 2, pillH * 0.2);
+    const overlap = this.px(theme.geometry.legatoSeamOverlap);
 
-    for (let i = 0; i < laneNotes.length - 1; i++) {
-      const a = laneNotes[i];
-      if (a.joinNext !== 'touch') continue;
-      const b = laneNotes[i + 1];
-      const x0 = a.x + a.w;
-      const x1 = b.x;
-      if (x1 <= x0) continue;
-      const top = a.centerY - h / 2;
-      const mid = (x0 + x1) / 2;
+    const cells = chain.map((item, idx) => ({
+      x: item.x,
+      w: idx < chain.length - 1 ? chain[idx + 1].x - item.x : item.w,
+    }));
 
-      ctx.save();
-      ctx.fillStyle = fingerColor(theme, a.note.finger);
-      ctx.fillRect(x0 - 0.5, top, mid - x0 + 1, h);
-      ctx.fillStyle = fingerColor(theme, b.note.finger);
-      ctx.fillRect(mid, top, x1 - mid + 0.5, h);
-      ctx.strokeStyle = theme.keyline;
-      ctx.lineWidth = this.outlineWidth();
-      ctx.beginPath();
-      ctx.moveTo(x0, top);
-      ctx.lineTo(x1, top);
-      ctx.moveTo(x0, top + h);
-      ctx.lineTo(x1, top + h);
-      ctx.stroke();
-      ctx.restore();
+    ctx.save();
+    for (let idx = 0; idx < chain.length; idx++) {
+      const note = chain[idx].note;
+      const isDead = note.fret < 0 || note.techniques.dead === true;
+      const isOpen = note.fret === 0 && !isDead;
+      const cell = cells[idx];
+      const fx = idx > 0 ? cell.x - overlap : cell.x;
+      const fw = cell.w + (idx > 0 ? overlap : 0) + (idx < chain.length - 1 ? overlap : 0);
+      ctx.fillStyle = isOpen ? theme.fingers.open : isDead ? theme.dead : fingerColor(theme, note.finger);
+      ctx.fillRect(fx, top, fw, pillH);
     }
+    ctx.restore();
+
+    ctx.save();
+    this.unionRoundRectPath(cells, top, pillH, r);
+    ctx.strokeStyle = theme.keyline;
+    ctx.lineWidth = this.outlineWidth();
+    ctx.stroke();
+    ctx.restore();
+
+    for (let idx = 0; idx < chain.length; idx++) {
+      const item = chain[idx];
+      // The hit-test rect is split at the seam (flush, so the cell's own
+      // touching edge is the split point) — the same rect just filled.
+      this.lastLayout.push({ note: item.note, x: cells[idx].x, w: cells[idx].w, centerY: item.centerY, h: pillH });
+      this.drawPillLabel(item);
+    }
+  }
+
+  /** Traces the outer boundary of N flush, same-height rounded cells as one path — no stroke crosses an interior seam. */
+  private unionRoundRectPath(cells: { x: number; w: number }[], top: number, height: number, radius: number): void {
+    const ctx = this.ctx;
+    const rad = (w: number) => Math.max(0, Math.min(radius, w / 2, height / 2));
+    ctx.beginPath();
+    ctx.moveTo(cells[0].x + rad(cells[0].w), top);
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i];
+      const rightX = c.x + c.w;
+      const r0 = rad(c.w);
+      ctx.lineTo(rightX - r0, top);
+      ctx.arcTo(rightX, top, rightX, top + r0, r0);
+      if (i < cells.length - 1) {
+        const r1 = rad(cells[i + 1].w);
+        ctx.arcTo(rightX, top, rightX + r1, top, r1);
+      }
+    }
+    const last = cells[cells.length - 1];
+    const lastR = rad(last.w);
+    const rightX = last.x + last.w;
+    ctx.lineTo(rightX, top + height - lastR);
+    ctx.arcTo(rightX, top + height, rightX - lastR, top + height, lastR);
+    for (let i = cells.length - 1; i >= 0; i--) {
+      const c = cells[i];
+      const r0 = rad(c.w);
+      ctx.lineTo(c.x + r0, top + height);
+      ctx.arcTo(c.x, top + height, c.x, top + height - r0, r0);
+      if (i > 0) {
+        const r1 = rad(cells[i - 1].w);
+        ctx.arcTo(c.x, top + height, c.x - r1, top + height, r1);
+      }
+    }
+    const first = cells[0];
+    const firstR = rad(first.w);
+    ctx.lineTo(first.x, top + firstR);
+    ctx.arcTo(first.x, top, first.x + firstR, top, firstR);
+    ctx.closePath();
   }
 
   private drawPill(item: Placed): void {
@@ -530,8 +622,6 @@ export class HighwayView {
       return;
     }
 
-    // Every corner on every pill carries the same curve; a joined pair is
-    // told apart by its bridge, not by a different shape.
     const r = this.pillRadius();
 
     ctx.save();
@@ -543,6 +633,18 @@ export class HighwayView {
     ctx.stroke();
     ctx.restore();
 
+    this.drawPillLabel(item);
+    this.lastLayout.push({ note, x: item.x, w: item.w, centerY: item.centerY, h: pillH });
+  }
+
+  /** The fret number (or the dead-note ×), centred on the note's own rect — never the seam-widened chain cell. */
+  private drawPillLabel(item: Placed): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const note = item.note;
+    const pillH = this.pillHeight();
+    const isDead = note.fret < 0 || note.techniques.dead === true;
+    const isOpen = note.fret === 0 && !isDead;
     const key = isOpen ? 'open' : isDead ? 'dead' : fingerKey(note.finger);
     const ink = pillTextFor(theme, key);
 
@@ -571,8 +673,6 @@ export class HighwayView {
       ctx.textBaseline = 'middle';
       ctx.fillText(label, item.x + item.w / 2, item.centerY);
     }
-
-    this.lastLayout.push({ note, x: item.x, w: item.w, centerY: item.centerY, h: pillH });
   }
 
   /**
@@ -616,14 +716,12 @@ export class HighwayView {
    * than in the note's own width — a mark that eats width makes the note that
    * begins the gesture the least readable thing on the lane.
    */
-  private drawMarks(item: Placed, currentTick: number): void {
+  private drawMarks(item: Placed, next: Placed | undefined, currentTick: number): void {
     const note = item.note;
     const pillH = this.pillHeight();
 
-    if (note.techniques.slideIn) this.drawSlideMark(item, note.techniques.slideIn, 'in');
-    if (note.techniques.slideOut) this.drawSlideMark(item, note.techniques.slideOut, 'out');
     if (note.techniques.hammer || note.techniques.pull) {
-      this.drawHammerMark(item, note.techniques.pull === true);
+      this.drawHammerMark(item, next, note.techniques.pull === true);
     }
     if (note.techniques.bend) this.drawBend(item, pillH, note.techniques.bendFrets);
 
@@ -667,59 +765,133 @@ export class HighwayView {
   }
 
   /**
-   * The slide: a straight diagonal above the notes, leaning the way the finger
-   * travels. Where the slide is one pick the two pills already touch, so the
-   * mark spans them; a slide out into silence trails off instead.
+   * The slide is a contour rail, not a diagonal symbol: each note in a slide
+   * chain gets a short flat plateau at its own level in the clear lane above
+   * the string, and the diagonal only travels between plateaus. A chain of
+   * `5 4 5 5` then reads high–down–low–up–high, which is what the hand does.
+   * A note too short to carry a plateau drops it and lets the riser run
+   * corner to corner instead of taking width from the note.
    */
-  private drawSlideMark(item: Placed, direction: 'up' | 'down', side: 'in' | 'out'): void {
+  private drawSlideRail(chain: Placed[]): void {
+    if (chain.length < 2) {
+      this.drawSlideStub(chain[0]);
+      return;
+    }
     const ctx = this.ctx;
     const theme = this.theme;
-    const rise = this.px(theme.geometry.markRise);
-    const y = this.markBaseY(item);
-    const dy = direction === 'up' ? -1 : 1;
+    const g = theme.geometry;
+    const laneTop = chain[0].centerY - this.laneHeight() / 2;
+    const stepPx = this.px(g.slideRailStep ?? 20);
+    const topPx = this.px(g.slideRailTop ?? 5);
+    const maxLevels = g.slideRailMaxLevels ?? 3;
+    const insetPx = this.px(g.slideRailPlateauInset ?? 5);
+    const minPlateauPx = this.px(g.slideRailMinPlateau ?? 16);
 
-    let x0: number;
-    let x1: number;
-    if (side === 'out' && item.joinNext !== 'none') {
-      // Spans this note and the one it slides into.
-      const inset = item.w * 0.3;
-      x0 = item.x + inset;
-      x1 = item.x + item.w + inset;
-    } else if (side === 'out') {
-      x0 = item.x + item.w * 0.5;
-      x1 = item.x + item.w + this.px(theme.geometry.slideTailWidth) * 3;
-    } else {
-      x0 = item.x - this.px(theme.geometry.slideTailWidth) * 3;
-      x1 = item.x + item.w * 0.5;
+    const levels: number[] = [0];
+    for (let idx = 1; idx < chain.length; idx++) {
+      const dir = chain[idx - 1].note.techniques.slideOut;
+      levels.push(levels[idx - 1] + (dir === 'up' ? -1 : 1));
     }
+    const minLevel = Math.min(...levels);
+    const clamped = levels.map((l) => Math.max(0, Math.min(maxLevels - 1, l - minLevel)));
+    const yFor = (level: number) => laneTop + topPx + level * stepPx;
 
-    const y0 = y + (dy < 0 ? rise / 2 : -rise / 2);
-    const y1 = y + (dy < 0 ? -rise / 2 : rise / 2);
-    this.strokeWithHalo(() => {
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-    }, this.px(theme.geometry.slideTailWidth));
+    const points: { x: number; y: number }[] = [];
+    chain.forEach((item, idx) => {
+      const y = yFor(clamped[idx]);
+      if (item.w - insetPx * 2 >= minPlateauPx) {
+        points.push({ x: item.x + insetPx, y });
+        points.push({ x: item.x + item.w - insetPx, y });
+      } else {
+        points.push({ x: item.x + item.w / 2, y });
+      }
+    });
+
+    const colour = theme.slideRailUseFingerColour
+      ? fingerColor(theme, chain[0].note.finger)
+      : theme.slideRail ?? theme.techniqueStroke;
+    const width = this.px(g.slideRailWidth ?? 7);
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = theme.markHalo ?? theme.keyline;
+    ctx.lineWidth = width + this.outlineWidth() * 2.5;
+    this.pathThroughPoints(points);
+    ctx.stroke();
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    this.pathThroughPoints(points);
+    ctx.stroke();
+    ctx.restore();
   }
 
-  /** The arc over a hammer-on or pull-off pair, plus the H or P a tab would print. */
-  private drawHammerMark(item: Placed, pull: boolean): void {
+  /** A lone slide with no visible partner (target off-screen, or a slide out into silence) — a short trailing diagonal. */
+  private drawSlideStub(item: Placed): void {
+    const dir = item.note.techniques.slideOut ?? item.note.techniques.slideIn;
+    if (!dir) return;
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const g = theme.geometry;
+    const laneTop = item.centerY - this.laneHeight() / 2;
+    const y = laneTop + this.px(g.slideRailTop ?? 5);
+    const tail = this.px(g.slideRailWidth ?? 7) * 3;
+    const isOut = item.note.techniques.slideOut !== undefined;
+    const x0 = isOut ? item.x + item.w * 0.5 : item.x - tail;
+    const x1 = isOut ? item.x + item.w + tail : item.x + item.w * 0.5;
+    const dy = dir === 'up' ? -1 : 1;
+    const rise = this.px(g.slideRailStep ?? 20) * dy;
+    const width = this.px(g.slideRailWidth ?? 7);
+    const colour = theme.slideRailUseFingerColour ? fingerColor(theme, item.note.finger) : theme.slideRail ?? theme.techniqueStroke;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = theme.markHalo ?? theme.keyline;
+    ctx.lineWidth = width + this.outlineWidth() * 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x0, isOut ? y : y - rise);
+    ctx.lineTo(x1, isOut ? y + rise : y);
+    ctx.stroke();
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(x0, isOut ? y : y - rise);
+    ctx.lineTo(x1, isOut ? y + rise : y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private pathThroughPoints(points: { x: number; y: number }[]): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  }
+
+  /**
+   * The arc over a hammer-on or pull-off pair, plus the H or P a tab would
+   * print. Springs from and lands on the two pills' own centres — anchoring
+   * to an edge instead shoves the whole mark toward the second note, so the
+   * apex lands past the seam rather than between the two notes it joins.
+   */
+  private drawHammerMark(item: Placed, next: Placed | undefined, pull: boolean): void {
     const ctx = this.ctx;
     const theme = this.theme;
     const rise = this.px(theme.geometry.hammerArcRise);
-    const y = this.markBaseY(item);
-    const x0 = item.x + item.w * 0.3;
-    const x1 = item.joinNext !== 'none' ? item.x + item.w * 1.3 : item.x + item.w * 0.9;
-    const midX = (x0 + x1) / 2;
+    const pillTop = item.centerY - this.pillHeight() / 2;
+    const cx0 = item.x + item.w / 2;
+    const cx1 = next ? next.x + next.w / 2 : item.x + item.w * 1.5;
+    const midX = (cx0 + cx1) / 2;
 
     this.strokeWithHalo(() => {
       ctx.beginPath();
-      ctx.moveTo(x0, y);
-      ctx.quadraticCurveTo(midX, y - rise * 2, x1, y);
+      ctx.moveTo(cx0, pillTop);
+      ctx.quadraticCurveTo(midX, pillTop - rise * 2, cx1, pillTop);
     }, this.px(theme.geometry.hammerArcWidth));
 
     const size = this.px(theme.geometry.hammerLabelSize);
-    this.label(pull ? 'P' : 'H', midX, y - rise - size * 0.7, size);
+    const gap = this.px(theme.geometry.markGap);
+    this.label(pull ? 'P' : 'H', midX, pillTop - rise - gap - size * 0.7, size);
   }
 
   /**
@@ -773,15 +945,21 @@ export class HighwayView {
       const last = merged[merged.length - 1];
       if (last && span.startX - last.endX < this.px(theme.geometry.pmJoinGap)) {
         last.endX = Math.max(last.endX, span.endX);
+        last.laneIndex = Math.min(last.laneIndex, span.laneIndex);
       } else {
         merged.push({ ...span });
       }
     }
 
     const size = this.px(theme.geometry.pmLabelSize);
-    const y = this.headerHeight() - size;
+    const headerY = this.headerHeight() - size;
+    const nearestLane = theme.geometry.pmRailPlacement !== 'header';
+    const offsetPx = this.px(theme.geometry.pmRailOffset ?? 10);
     ctx.save();
     for (const span of merged) {
+      const y = nearestLane
+        ? span.laneIndex * this.laneHeight() + this.headerHeight() - offsetPx
+        : headerY;
       ctx.font = `700 ${size}px Manrope, sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
@@ -857,18 +1035,46 @@ export class HighwayView {
 
     ctx.save();
     this.roundRectPath(left, top, w, bottom - top, r, r, r, r);
-    ctx.fillStyle = theme.chordPill;
+    ctx.fillStyle = (this.obsMode && theme.chordPillObs) || theme.chordPill;
     ctx.fill();
-    ctx.strokeStyle = theme.keyline;
+    ctx.strokeStyle = theme.chordPillKeyline ?? theme.keyline;
+    ctx.globalAlpha = theme.chordPillKeylineOpacity ?? 1;
     ctx.lineWidth = this.outlineWidth();
     ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.restore();
 
-    const size = this.fittedFontSize(name, nameSize, w * 0.86, theme.geometry.fretWeight);
+    // The block never grows to fit its name — a long name on a short chord
+    // shrinks only down to the readability floor, then continues past the
+    // block's right edge as stage text rather than vanishing into it.
+    const floorSize = this.px((theme.geometry.chordNameMinSizeRatio ?? 0.0259) * STAGE_BASELINE_HEIGHT);
+    const maxTextWidth = w * 0.86;
+    ctx.font = `${theme.geometry.fretWeight} ${nameSize}px Manrope, sans-serif`;
+    const naturalWidth = ctx.measureText(name).width;
+    const size =
+      naturalWidth > maxTextWidth && naturalWidth > 0
+        ? Math.max(floorSize, nameSize * (maxTextWidth / naturalWidth))
+        : nameSize;
     ctx.font = `${theme.geometry.fretWeight} ${size}px Manrope, sans-serif`;
-    ctx.fillStyle = pillTextFor(theme, 'chord');
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(name, left + w / 2, (top + bottom) / 2);
+    const fittedWidth = ctx.measureText(name).width;
+
+    ctx.save();
+    if (fittedWidth > maxTextWidth && theme.geometry.chordNameOverflow === 'right') {
+      const gap = this.px(theme.geometry.chordNameOverflowGap ?? 10);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = theme.markHalo ?? theme.keyline;
+      ctx.lineWidth = this.px(theme.geometry.markHaloWidth ?? 5);
+      ctx.strokeText(name, left + gap, (top + bottom) / 2);
+      ctx.fillStyle = theme.text;
+      ctx.fillText(name, left + gap, (top + bottom) / 2);
+    } else {
+      ctx.fillStyle = pillTextFor(theme, 'chord');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(name, left + w / 2, (top + bottom) / 2);
+    }
     ctx.restore();
 
     for (const item of group) {

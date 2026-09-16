@@ -24,9 +24,9 @@ export interface ThemeGeometry {
   tieBarHeightRatio: number;
   hammerArcWidth: number;
   hammerArcRise: number;
+  /** 'pill-centre' springs the arc from the two pill centres; 'pill-edge' restores the old leading-edge anchoring. */
+  hammerArcAnchor?: 'pill-centre' | 'pill-edge';
   hammerLabelSize: number;
-  slideTailWidth: number;
-  slideTailAngle: number;
   bendStemWidth: number;
   bendRise: number;
   /** Type size of the ½ / full / 1½ bend label. */
@@ -42,6 +42,33 @@ export interface ThemeGeometry {
   hitRingMs: number;
   playedOpacity: number;
   playedFadeMs: number;
+  /** Ground between two pills joined by a legato pair (hammer-on, pull-off, legato slide): 0 = flush butt. */
+  legatoJoinGap: number;
+  /** 'union' strokes the merged silhouette once; 'per-pill' restores two separate outlines. */
+  legatoJoinOutline?: 'union' | 'per-pill';
+  /** Px of overlap at a legato seam before the union path is built — drawing only, never width or timing. */
+  legatoSeamOverlap: number;
+  /** Dark halo behind every cream mark. */
+  markHaloWidth?: number;
+  /** The slide contour rail: stroke weight, level spacing, plateau rules. */
+  slideRailWidth?: number;
+  slideRailStep?: number;
+  slideRailTop?: number;
+  slideRailMaxLevels?: number;
+  slideRailPlateauInset?: number;
+  slideRailMinPlateau?: number;
+  slideRailLandingTick?: number;
+  slideRailJoinRadius?: number;
+  /** One rail per shared start/end shape, drawn above the topmost string, instead of one per string. */
+  slideRailPerShape?: boolean;
+  /** Floor for chord-name type, as a ratio of stage height. */
+  chordNameMinSizeRatio?: number;
+  /** 'right' lets a name that won't fit at the floor run past the block; 'shrink' restores the old behaviour. */
+  chordNameOverflow?: 'right' | 'shrink';
+  chordNameOverflowGap?: number;
+  /** 'nearest-lane' rails P.M. above the highest muted string; 'header' restores the top-of-stage rail. */
+  pmRailPlacement?: 'nearest-lane' | 'header';
+  pmRailOffset?: number;
 }
 
 export interface ThemeObs {
@@ -75,12 +102,23 @@ export interface Theme {
   pillTextOverrides?: { [key: string]: string };
   /** Ground for the one-pill-across-the-strings chord marker. */
   chordPill: string;
+  /** Chord block ground in OBS mode — one lightness step up so it doesn't sink into a dark feed. */
+  chordPillObs?: string;
+  chordPillKeyline?: string;
+  chordPillKeylineOpacity?: number;
   dead: string;
   hit: string;
   chordJoin: string;
   chordJoinOpacity: number;
   techniqueStroke: string;
+  /** Dark halo drawn behind every cream technique mark. */
+  markHalo?: string;
+  /** Ink of the slide contour rail. */
+  slideRail?: string;
+  /** Draw the slide rail in the chain's own finger colour instead of `slideRail`. */
+  slideRailUseFingerColour?: boolean;
   palmMuteRing: string;
+  guessRing?: string;
   obs: ThemeObs;
   geometry: ThemeGeometry;
 }

@@ -1,27 +1,33 @@
 {
   "name": "daylight",
   "notes": "Light stage for bright rooms and iPad practice in sunlight. Same four hues as `default`, same finger-to-hue mapping — only the lightness inverts, so the colour a student learned in a lesson still means the same finger. Not for OBS: use `default` there.",
+
   "stage": {
     "background": "#F5F3EF",
     "backgroundImage": null,
     "backgroundOpacity": 1,
     "transparentInObs": false
   },
+
   "lane": "#7E7A72",
   "laneOpacity": 0.42,
   "barLine": "#7E7A72",
   "barLineOpacity": 0.85,
+
   "playLine": "#BB5D00",
   "playLineWidth": 5,
   "playLineCapSize": 16,
   "playLinePosition": 0.22,
+
   "keyline": "#FBF8F3",
   "keylineWidth": 2,
   "keylineWidthObs": 2,
+
   "text": "#2E2A28",
   "textMuted": "#6A625C",
   "textEyebrow": "#4C6D47",
   "pillText": "#FBF8F3",
+
   "fingers": {
     "open": "#FFFFFF",
     "1": "#684F00",
@@ -36,12 +42,9 @@
     "4": "oklch(0.545 0.165 352)"
   },
   "pillTextOverrides": {
-    "open": "#2E2A28",
-    "chord": "#FBF8F3"
+    "open": "#2E2A28"
   },
-  "chordPill": "#6F4B52",
-  "chordPillKeyline": "#2E2A28",
-  "chordPillKeylineOpacity": 0.3,
+
   "dead": "#6E6B67",
   "hit": "#2E2A28",
   "chordJoin": "#2E2A28",
@@ -50,8 +53,12 @@
   "markHalo": "#FBF8F3",
   "slideRail": "#2E2A28",
   "slideRailUseFingerColour": false,
+  "chordPill": "#6F4B52",
+  "chordPillKeyline": "#2E2A28",
+  "chordPillKeylineOpacity": 0.3,
   "palmMuteRing": "#6A625C",
   "guessRing": "rgba(251,248,243,0.6)",
+
   "obs": {
     "laneLight": "#FBF8F3",
     "laneLightOpacity": 0.8,
@@ -60,41 +67,29 @@
     "lineWidth": 2,
     "textShadow": "0 0 3px #FBF8F3, 0 1px 2px #FBF8F3"
   },
+
   "geometry": {
     "headerHeight": 96,
     "laneHeightFormula": "(stageHeight - headerHeight) / laneCount",
     "pillHeightRatio": 0.585,
     "pillRadiusRatio": 0.21,
+    "pillMinWidthRatio": 0.92,
     "fretSizeRatio": 0.585,
     "fretWeight": 700,
     "fretTracking": "-0.02em",
     "pxPerBeatRatio": 0.278,
     "runMergeGap": 8,
+    "runDividerWidth": 3,
     "runCellNumberMinWidth": 56,
+    "deadWidthRatio": 0.75,
     "tieBarHeightRatio": 0.375,
     "hammerArcWidth": 4,
     "hammerArcRise": 28,
     "hammerArcAnchor": "pill-centre",
-    "hammerLabelSize": 30,
-    "bendStemWidth": 9,
-    "bendRise": 62,
-    "bendLabelSize": 26,
-    "harmonicRotation": 45,
-    "harmonicSizeRatio": 1.18,
-    "chordJoinWidth": 10,
-    "hitScale": 1.06,
-    "hitScaleMs": 90,
-    "hitRingWidth": 4,
-    "hitRingGrow": 10,
-    "hitRingMs": 140,
-    "playedOpacity": 0.4,
-    "playedFadeMs": 200,
     "nickGap": 9,
     "legatoJoinGap": 0,
     "legatoJoinOutline": "union",
     "legatoSeamOverlap": 1,
-    "markGap": 12,
-    "markRise": 30,
     "markHaloWidth": 5,
     "slideRailWidth": 7,
     "slideRailStep": 20,
@@ -103,17 +98,26 @@
     "slideRailPlateauInset": 5,
     "slideRailMinPlateau": 16,
     "slideRailLandingTick": 0,
-    "slideRailJoinRadius": 5,
     "slideRailPerShape": true,
+    "slideRailJoinRadius": 5,
     "chordNameMinSizeRatio": 0.0259,
     "chordNameOverflow": "right",
     "chordNameOverflowGap": 10,
-    "pmLabelSize": 22,
-    "pmRuleWidth": 3,
-    "pmDashOn": 9,
-    "pmDashOff": 7,
-    "pmJoinGap": 60,
     "pmRailPlacement": "nearest-lane",
-    "pmRailOffset": 10
+    "pmRailOffset": 10,
+    "bendStemWidth": 9,
+    "bendRise": 62,
+    "harmonicRotation": 45,
+    "harmonicRadius": 14,
+    "palmMuteRingWidth": 5,
+    "palmMuteRingOffset": 7,
+    "chordJoinWidth": 10,
+    "hitScale": 1.06,
+    "hitScaleMs": 90,
+    "hitRingWidth": 4,
+    "hitRingGrow": 10,
+    "hitRingMs": 140,
+    "playedOpacity": 0.4,
+    "playedFadeMs": 200
   }
 }
