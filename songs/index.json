@@ -1,0 +1,15 @@
+{
+  "songs": [
+    {
+      "slug": "r-u-mine",
+      "title": "R U Mine",
+      "artist": "Arctic Monkeys",
+      "file": "songs/r-u-mine/song.gp",
+      "noGuitarFile": "songs/r-u-mine/no-guitar.mp3",
+      "defaultTrack": 0,
+      "audioOffsetSeconds": 0,
+      "theme": "default",
+      "tags": []
+    }
+  ]
+}
