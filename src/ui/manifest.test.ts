@@ -36,4 +36,14 @@ describe('resolveSongUrl', () => {
       'https://library.example/songs/freedom/song.gp',
     );
   });
+
+  it('resolves a relative manifest against the app’s own subpath, not the domain root', () => {
+    // GitHub Pages project sites (and MANIFEST_URL's default) give a plain
+    // relative path like "songs/index.json" — that manifest is served by
+    // this same app, which may itself live under /<repo>/, not at the
+    // domain root, so the song file must follow it there.
+    expect(resolveSongUrl('songs/index.json', song('songs/freedom/song.gp'), PAGE)).toBe(
+      'https://portal.example/playalong/songs/freedom/song.gp',
+    );
+  });
 });

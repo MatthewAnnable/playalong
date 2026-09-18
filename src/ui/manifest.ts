@@ -41,11 +41,23 @@ export async function fetchManifest(url: string): Promise<Manifest | null> {
  * manifest (the plan's example manifest lives at songs/index.json and still
  * writes "songs/freedom/song.gp"). A fully-qualified URL is used as-is, so a
  * manifest can point anywhere.
+ *
+ * A manifest given as an absolute path or a full URL (an external library,
+ * or one hosted at its own domain root) treats "site root" as that host's
+ * actual root. A manifest given as a plain relative path — the default,
+ * `songs/index.json` — is served by this same app, which may itself be
+ * deployed under a subpath (GitHub Pages project sites: `/<repo>/`); its
+ * "site root" is that subpath, not the domain root, or a song link 404s the
+ * moment the app isn't hosted at the domain root.
  */
 export function resolveSongUrl(manifestUrl: string, song: ManifestSong, pageUrl = window.location.href): string {
   if (/^https?:\/\//i.test(song.file)) return song.file;
-  const manifestAbsolute = new URL(manifestUrl, pageUrl);
-  return new URL(song.file.replace(/^\//, ''), new URL('/', manifestAbsolute)).toString();
+  const filePath = song.file.replace(/^\//, '');
+  const isManifestRelative = !/^https?:\/\//i.test(manifestUrl) && !manifestUrl.startsWith('/');
+  const siteRoot = isManifestRelative
+    ? new URL('.', new URL(pageUrl))
+    : new URL('/', new URL(manifestUrl, pageUrl));
+  return new URL(filePath, siteRoot).toString();
 }
 
 export async function fetchSongBuffer(url: string): Promise<ArrayBuffer> {
