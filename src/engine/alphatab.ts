@@ -189,6 +189,15 @@ function updateFromPlayback(): void {
   state.currentBar = findBarAtTick(tick);
   const ticksPerSecond = (tempoAtBar(state.currentBar) / 60) * ticksPerQuarter;
   clock.recordSample(mainAudio.currentTime, tick, ticksPerSecond);
+  // alphaTab's own looping (api.isLooping) just snaps the audio back with no
+  // run-up — see restartLoopWithCountIn — so looping is driven from here
+  // instead: the moment playback crosses past the loop's last bar, restart it
+  // with a count-in. state.countingIn is the re-entrancy guard: it's set
+  // synchronously as the first step of the restart, before anything async, so
+  // the next 20ms tick of this same loop sees it and skips.
+  if (state.loopEnabled && state.isPlaying && !state.countingIn && state.currentBar > state.loopEndBar) {
+    void restartLoopWithCountIn();
+  }
   notify();
 }
 
@@ -433,7 +442,7 @@ function horizontalScale(): number {
   return Math.min(Math.max(available / HORIZONTAL_SYSTEM_HEIGHT, 1), HORIZONTAL_SCALE_MAX);
 }
 /** Where the played bar sits across the stage, left to right. */
-const HORIZONTAL_READING_POINT = 0.4;
+const HORIZONTAL_READING_POINT = 0.25;
 
 const INK = new model.Color(46, 42, 40);
 const INK_SOFT = new model.Color(106, 98, 92);
@@ -509,8 +518,43 @@ function applyScoreLayout(horizontal: boolean): void {
   container.classList.toggle('is-horizontal', horizontal);
 }
 
+/**
+ * The reading point and scale are computed from the container's own pixel
+ * size at the moment layout is applied — they don't track a later resize on
+ * their own. Without this, resizing the window (or an OBS/Zoom share source)
+ * while the horizontal line is showing leaves it scrolling to the wrong
+ * offset, which reads as the line drifting off toward the left edge.
+ */
+window.addEventListener('resize', () => {
+  if (!api || !horizontalScore) return;
+  api.settings.display.scale = horizontalScale();
+  api.settings.player.scrollOffsetX = -Math.round(container.clientWidth * HORIZONTAL_READING_POINT);
+  api.updateSettings();
+  api.render();
+});
+
 export function isHorizontalScore(): boolean {
   return horizontalScore;
+}
+
+/**
+ * Runs one bar of count-in clicks for the given bar's own time signature and
+ * tempo. Shared by the initial play press and the loop restart below, so
+ * both count in exactly the same way. Resolves false if a newer count-in (or
+ * a cancel) started before this one finished, so the caller knows not to act
+ * on a count-in that is no longer current.
+ */
+async function runCountIn(bar: number): Promise<boolean> {
+  const masterBar = score?.masterBars[bar - 1];
+  if (!masterBar) return true;
+  const token = ++countInToken;
+  state.countingIn = true;
+  notify();
+  await playCountIn(masterBar.timeSignatureNumerator, tempoAtBar(bar));
+  if (token !== countInToken) return false;
+  state.countingIn = false;
+  notify();
+  return true;
 }
 
 export async function togglePlay(): Promise<void> {
@@ -533,23 +577,31 @@ export async function togglePlay(): Promise<void> {
   }
 
   const bar = findBarAtTick(api.player?.tickPosition ?? 0);
-  const masterBar = score?.masterBars[bar - 1];
-  if (masterBar) {
-    const token = ++countInToken;
-    state.countingIn = true;
-    notify();
-    await playCountIn(masterBar.timeSignatureNumerator, tempoAtBar(bar));
-    if (token !== countInToken) return;
-    state.countingIn = false;
-    notify();
-  }
+  if (!(await runCountIn(bar))) return;
   api.playPause();
+}
+
+/**
+ * The loop is a count-in away from being practisable at tempo: alphaTab's
+ * native loop just snaps the audio back instantly (and the compressed-audio
+ * re-decode on that seek leaves a small gap), which drops you back into the
+ * riff with no run-up. Looping now restarts with the same "1 2 3 4" count-in
+ * as the initial play, so a loop reads as a bar of count-in followed by the
+ * riff, every time round — something you can actually play along with.
+ */
+async function restartLoopWithCountIn(): Promise<void> {
+  if (!api) return;
+  api.pause();
+  if (!(await runCountIn(state.loopStartBar))) return;
+  seekToBar(state.loopStartBar);
+  api.play();
 }
 
 export function seekToBar(bar: number): void {
   if (!api || !score) return;
   const clamped = Math.min(Math.max(bar, 1), score.masterBars.length);
   api.tickPosition = barToTick(clamped);
+  forceCursorToCurrentTick();
   updateFromPlayback();
 }
 
@@ -558,12 +610,32 @@ export function nudgeBar(delta: number): void {
 }
 
 /**
- * Seeks the recording itself rather than asking alphaTab for a tick position:
- * alphaTab rounds a time to the nearest sync point, which can be seconds away
- * and made dragging the progress bar feel like it was ignoring you. Setting the
- * audio element and pushing that position into alphaTab keeps the score cursor
- * and the highway exactly where the thumb is, which is what makes scrubbing
- * readable while the button is still held down.
+ * alphaTab only fires the internal `positionChanged` event — the thing that
+ * moves the cursor and scrolls the horizontal score — while its sequencer
+ * considers itself actively playing. Seeking or scrubbing while paused
+ * updates its internal tick silently and leaves the cursor exactly where it
+ * was, which is what made the score stop tracking the playhead outside of
+ * playback. alphaTab's own code hits the same wall internally (see
+ * `applyPlaybackRangeFromHighlight`) and works around it by calling the
+ * cursor updater directly instead of only setting the position — there is no
+ * public equivalent, so this does the same thing through the private method.
+ */
+function forceCursorToCurrentTick(): void {
+  if (!api) return;
+  const internals = api as unknown as {
+    _cursorUpdateTick?: (tick: number, stop: boolean, cursorSpeed: number, shouldScroll?: boolean, forceUpdate?: boolean) => void;
+  };
+  internals._cursorUpdateTick?.(api.tickPosition, false, 1, true, true);
+}
+
+/**
+ * Seeks the recording itself rather than asking alphaTab for a *tick*
+ * position: ticks round to the nearest sync point, which can be seconds away
+ * and made dragging the progress bar feel like it was ignoring you. Setting
+ * the audio element directly keeps the audio and the highway (which reads
+ * its own clock, not alphaTab's) exactly where the thumb is; `timePosition`
+ * is only set afterwards so alphaTab's own tick bookkeeping (and the score
+ * cursor, forced below) agrees with it.
  */
 export function seekToSeconds(seconds: number): void {
   if (!mainAudio) return;
@@ -572,6 +644,10 @@ export function seekToSeconds(seconds: number): void {
   mainAudio.currentTime = clamped;
   if (noGuitarAudio) noGuitarAudio.currentTime = clamped;
   mediaOutput?.updatePosition(clamped * 1000);
+  if (api) {
+    api.timePosition = clamped * 1000;
+    forceCursorToCurrentTick();
+  }
   updateFromPlayback();
 }
 
@@ -581,22 +657,18 @@ export function setSpeed(percent: number): void {
   notify();
 }
 
+/**
+ * Looping is driven entirely from `updateFromPlayback` (see
+ * `restartLoopWithCountIn`), not from alphaTab's native `isLooping` — that
+ * just snapped the audio back instantly with no run-up. `playbackRange` is
+ * left untouched here for the same reason: alphaTab would otherwise try to
+ * enforce the range itself and race with our own restart.
+ */
 export function setLoop(startBar: number, endBar: number, enabled: boolean): void {
   if (!api || !score) return;
-  const start = Math.min(startBar, endBar);
-  const end = Math.max(startBar, endBar);
-  state.loopStartBar = start;
-  state.loopEndBar = end;
+  state.loopStartBar = Math.min(startBar, endBar);
+  state.loopEndBar = Math.max(startBar, endBar);
   state.loopEnabled = enabled;
-  if (enabled) {
-    const startTick = barToTick(start);
-    const endTick = end >= score.masterBars.length ? Number.MAX_SAFE_INTEGER : barToTick(end + 1);
-    api.playbackRange = { startTick, endTick };
-    api.isLooping = true;
-  } else {
-    api.playbackRange = null;
-    api.isLooping = false;
-  }
   notify();
 }
 

@@ -790,6 +790,31 @@
   box-sizing: border-box;
 }
 
+/* The loop chip's chrome colours (dark green ink on a light border) were
+   designed for the paper dock — on the dark, translucent presentation dock
+   they read as two shades of barely-visible dark green, so on/off was a
+   guess. On adds a lit, filled pill; off drops to plain grey, so the two are
+   never one low-contrast step apart. */
+#app.presentation .loop-chip {
+  border-color: var(--ma-green-line);
+  background: rgba(168, 194, 163, 0.16);
+}
+
+#app.presentation .loop-chip-label,
+#app.presentation .loop-bar-input {
+  color: var(--ma-green-line);
+}
+
+#app.presentation .loop-chip.is-disabled {
+  border-color: rgba(168, 162, 154, 0.4);
+  background: transparent;
+}
+
+#app.presentation .loop-chip.is-disabled .loop-chip-label,
+#app.presentation .loop-chip.is-disabled .loop-bar-input {
+  color: #a8a29a;
+}
+
 /* OBS browser source: the page itself must be transparent so the highway
    composites over the camera instead of showing as a black box. */
 

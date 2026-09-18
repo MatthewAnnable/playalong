@@ -19,7 +19,7 @@ export interface Manifest {
  * at a manifest — or pass ?manifest= — and the library page appears. Left
  * empty, the app stays drag-and-drop only and the library stays hidden.
  */
-export const MANIFEST_URL = '';
+export const MANIFEST_URL = 'songs/index.json';
 
 export function resolveManifestUrl(override?: string): string {
   return override || MANIFEST_URL;

@@ -296,6 +296,25 @@ initHighway();
 linkParams = readLinkParams();
 const mode = initMode(linkParams.mode);
 
+/**
+ * Opens a library song's score and, where the manifest names one, its
+ * no-guitar backing track too — a hosted song is otherwise missing the
+ * Guitar on/off track that a dropped-in second file gets for free.
+ */
+async function openManifestSong(manifestUrl: string, song: ManifestSong): Promise<void> {
+  const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
+  await openScore(buffer);
+  if (song.noGuitarFile) {
+    const noGuitarBuffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, { ...song, file: song.noGuitarFile }));
+    const noGuitarFile = new File([noGuitarBuffer], 'no-guitar.mp3', { type: 'audio/mpeg' });
+    await setNoGuitarTrack(noGuitarFile);
+  }
+  hasSongLoaded = true;
+  revealPlayer();
+  songTitleEl.textContent = song.title;
+  songArtistEl.textContent = song.artist;
+}
+
 async function loadFromManifest(manifestUrl: string, params: LinkParams): Promise<void> {
   const manifest = await fetchManifest(manifestUrl);
   if (!manifest) return;
@@ -304,12 +323,7 @@ async function loadFromManifest(manifestUrl: string, params: LinkParams): Promis
   const song = manifest.songs.find((entry) => entry.slug === params.song);
   if (!song) return;
   try {
-    const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
-    await openScore(buffer);
-    hasSongLoaded = true;
-    revealPlayer();
-    songTitleEl.textContent = song.title;
-    songArtistEl.textContent = song.artist;
+    await openManifestSong(manifestUrl, song);
     clearPendingSongPrompt();
     applyLinkParams(params);
     setStatus(`Loaded "${song.title}" from the library.`);
@@ -330,12 +344,7 @@ function renderLibrary(songs: ManifestSong[], manifestUrl: string): void {
     button.addEventListener('click', async () => {
       setStatus(`Loading "${song.title}"…`);
       try {
-        const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
-        await openScore(buffer);
-        hasSongLoaded = true;
-        revealPlayer();
-        songTitleEl.textContent = song.title;
-        songArtistEl.textContent = song.artist;
+        await openManifestSong(manifestUrl, song);
         setStatus(`Loaded "${song.title}".`);
       } catch (err) {
         setStatus((err as Error).message, true);

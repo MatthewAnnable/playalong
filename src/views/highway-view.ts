@@ -539,7 +539,13 @@ export class HighwayView {
       w: idx < chain.length - 1 ? chain[idx + 1].x - item.x : item.w,
     }));
 
+    // Clipped to the union path: an unclipped fill is a plain rectangle, which
+    // pokes past the union's rounded outer corners and squares off the notch
+    // the outline traces at the seam — the keyline then reads as a stray dark
+    // line cutting across solid colour instead of the edge of it.
     ctx.save();
+    this.unionRoundRectPath(cells, top, pillH, r);
+    ctx.clip();
     for (let idx = 0; idx < chain.length; idx++) {
       const note = chain[idx].note;
       const isDead = note.fret < 0 || note.techniques.dead === true;

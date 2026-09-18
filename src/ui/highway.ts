@@ -82,9 +82,14 @@ function ensureView(): HighwayView {
 
 export function setHighwayView(visible: boolean): void {
   showingHighway = visible;
-  setScoreViewVisible(!visible);
+  // Unhide the surface *before* telling the score it's visible again — the
+  // horizontal layout measures the container's width to place its reading
+  // point, and a still-hidden container measures zero, which is what was
+  // pinning the scrolling line to the left edge after a Highway/Score
+  // switch in presentation mode.
   alphatabSurface.hidden = visible;
   highwaySurface.hidden = !visible;
+  setScoreViewVisible(!visible);
   viewToggleButton.textContent = visible ? 'Highway' : 'Score';
   if (visible) {
     const v = ensureView();
