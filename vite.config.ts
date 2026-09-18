@@ -1,5 +1,22 @@
-import { defineConfig } from 'vite';
+import { existsSync, cpSync } from 'node:fs';
+import { defineConfig, type Plugin } from 'vite';
 import { alphaTab } from '@coderline/alphatab-vite';
+
+/**
+ * `songs/` lives at the project root, not under `public/`, so the manifest
+ * fetch that works in dev (Vite's dev server serves the whole project tree)
+ * 404s on a production build — `vite build` only copies `public/` verbatim.
+ * Mirroring `songs/` into `dist/songs/` here is what makes a hosted-library
+ * song actually reachable once deployed.
+ */
+function copySongsPlugin(): Plugin {
+  return {
+    name: 'copy-songs',
+    closeBundle() {
+      if (existsSync('songs')) cpSync('songs', 'dist/songs', { recursive: true });
+    },
+  };
+}
 
 // base is overridable so the same build can live at the domain root or under
 // a project path (e.g. GitHub Pages at /playalong/, or a subfolder in the
@@ -9,7 +26,7 @@ export default defineConfig({
   server: {
     port: process.env.PORT ? Number(process.env.PORT) : 5173,
   },
-  plugins: [alphaTab()],
+  plugins: [alphaTab(), copySongsPlugin()],
   build: {
     rollupOptions: {
       // remote.html is the OBS control page (build plan 5.9).
