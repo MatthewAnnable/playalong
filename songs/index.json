@@ -8,6 +8,7 @@
       "noGuitarFile": "songs/r-u-mine/no-guitar.mp3",
       "defaultTrack": 0,
       "audioOffsetSeconds": 0,
+      "noGuitarOffsetSeconds": 0.06,
       "theme": "default",
       "tags": []
     }

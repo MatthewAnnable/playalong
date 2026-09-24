@@ -6,6 +6,7 @@ import {
   hasMainAudio,
   onStateChange,
   openScore,
+  setSongOffsets,
   replaceMainAudio,
   setGuitarOn,
   setLoop,
@@ -304,6 +305,7 @@ const mode = initMode(linkParams.mode);
 async function openManifestSong(manifestUrl: string, song: ManifestSong): Promise<void> {
   const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
   await openScore(buffer);
+  setSongOffsets(song.audioOffsetSeconds, song.noGuitarOffsetSeconds);
   if (song.noGuitarFile) {
     const noGuitarBuffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, { ...song, file: song.noGuitarFile }));
     const noGuitarFile = new File([noGuitarBuffer], 'no-guitar.mp3', { type: 'audio/mpeg' });

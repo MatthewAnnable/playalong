@@ -5,7 +5,10 @@ export interface ManifestSong {
   file: string;
   noGuitarFile?: string;
   defaultTrack?: number;
+  /** Shifts the highway and score against this song's audio, for a file whose own sync is off. */
   audioOffsetSeconds?: number;
+  /** How many seconds the no-guitar recording runs behind the main one (measure it; R U Mine's is 0.06). */
+  noGuitarOffsetSeconds?: number;
   theme?: string;
   tags?: string[];
 }

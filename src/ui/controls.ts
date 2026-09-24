@@ -2,6 +2,7 @@ import {
   nudgeBar,
   onStateChange,
   seekToSeconds,
+  setAudioDelay,
   setLoop,
   setSpeed,
   setTabOnly,
@@ -24,6 +25,11 @@ const speedSlider = document.querySelector<HTMLInputElement>('#speed-slider')!;
 const speedValue = document.querySelector<HTMLSpanElement>('#speed-value')!;
 const speedDownButton = document.querySelector<HTMLButtonElement>('#speed-down-button')!;
 const speedUpButton = document.querySelector<HTMLButtonElement>('#speed-up-button')!;
+const delayValue = document.querySelector<HTMLSpanElement>('#delay-value')!;
+const delayDownButton = document.querySelector<HTMLButtonElement>('#delay-down-button')!;
+const delayUpButton = document.querySelector<HTMLButtonElement>('#delay-up-button')!;
+/** One press of the audio-delay stepper — about a 64th note at 100 bpm, small enough to dial in by ear. */
+const DELAY_STEP_MS = 10;
 const loopChip = document.querySelector<HTMLDivElement>('#loop-chip')!;
 const loopClearButton = document.querySelector<HTMLButtonElement>('#loop-clear-button')!;
 const loopToggle = document.querySelector<HTMLInputElement>('#loop-toggle')!;
@@ -78,6 +84,7 @@ export function initControls(): void {
 
     speedSlider.value = String(state.speed);
     setText(speedValue, `${state.speed}%`);
+    setText(delayValue, state.audioDelayMs === 0 ? 'Sync 0' : `Sync ${state.audioDelayMs > 0 ? '+' : '−'}${Math.abs(state.audioDelayMs)}ms`);
 
     loopToggle.checked = state.loopEnabled;
     loopChip.classList.toggle('is-disabled', !state.loopEnabled);
@@ -171,6 +178,11 @@ export function initControls(): void {
   speedDownButton.addEventListener('click', () => setSpeed(Math.max(Number(speedSlider.value) - 5, 50)));
   speedUpButton.addEventListener('click', () => setSpeed(Math.min(Number(speedSlider.value) + 5, 120)));
 
+  delayDownButton.addEventListener('click', () => setAudioDelay(currentState.audioDelayMs - DELAY_STEP_MS));
+  delayUpButton.addEventListener('click', () => setAudioDelay(currentState.audioDelayMs + DELAY_STEP_MS));
+  // Double-clicking the readout puts the delay back to none.
+  delayValue.addEventListener('dblclick', () => setAudioDelay(0));
+
   function applyLoopFromInputs(): void {
     setLoop(Number(loopStart.value) || 1, Number(loopEnd.value) || 1, loopToggle.checked);
   }
@@ -238,6 +250,8 @@ export function initControls(): void {
   registerAction('speedDown', () => setSpeed(Math.max(currentState.speed - 5, 50)));
   registerAction('speedUp', () => setSpeed(Math.min(currentState.speed + 5, 120)));
   registerAction('speedReset', () => setSpeed(100));
+  registerAction('delayDown', () => setAudioDelay(currentState.audioDelayMs - DELAY_STEP_MS));
+  registerAction('delayUp', () => setAudioDelay(currentState.audioDelayMs + DELAY_STEP_MS));
   registerAction('guitarToggle', () => setGuitarOn(!currentState.guitarOn));
   registerAction('presentationToggle', () => togglePresentation());
   registerAction('nextTrack', () => {

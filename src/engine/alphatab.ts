@@ -28,11 +28,52 @@ export interface EngineState {
   trackIndex: number;
   /** True when the file names chords, which is what decides the chord-pill default. */
   hasChordNames: boolean;
+  /** This device's audio delay, in ms: how far the highway and score are held back to meet the sound. */
+  audioDelayMs: number;
   noteEvents: NoteEvent[];
   barMarkers: BarMarker[];
 }
 
 const CROSSFADE_MS = 80;
+
+/**
+ * Sync offsets. alphaTab's clock and the audio element's clock are the same
+ * clock shifted by `syncOffsetMs()`: alphaTab time = audio time − offset.
+ *
+ * - The device delay is how late the sound reaches the ear after the browser
+ *   says it has played it — a few ms on speakers, 100–250ms over Bluetooth or
+ *   a Zoom/OBS route. No browser reports it reliably, so it is set by ear and
+ *   remembered per device.
+ * - The song offset is the manifest's `audioOffsetSeconds`, for a file whose
+ *   own sync points are off.
+ * - The no-guitar offset is how far a separately made no-guitar recording
+ *   lags the main one (R U Mine's is 60ms late), so the two are started that
+ *   far apart and stay interchangeable.
+ */
+const AUDIO_DELAY_KEY = 'playalong.audioDelayMs';
+export const AUDIO_DELAY_LIMIT_MS = 400;
+let songOffsetMs = 0;
+let noGuitarOffsetSec = 0;
+/** How far the silent recording may wander from the audible one before it is pulled back. */
+const NO_GUITAR_DRIFT_SEC = 0.04;
+
+function loadAudioDelay(): number {
+  try {
+    const value = Number(localStorage.getItem(AUDIO_DELAY_KEY));
+    return Number.isFinite(value) ? Math.max(-AUDIO_DELAY_LIMIT_MS, Math.min(AUDIO_DELAY_LIMIT_MS, value)) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function syncOffsetMs(): number {
+  return state.audioDelayMs + songOffsetMs;
+}
+
+/** Where the no-guitar recording should be for a given main-recording time. */
+function noGuitarTimeFor(mainSeconds: number): number {
+  return Math.max(0, mainSeconds + noGuitarOffsetSec);
+}
 
 let api: AlphaTabApi | null = null;
 let mainAudio: HTMLAudioElement | null = null;
@@ -73,6 +114,7 @@ const state: EngineState = {
   trackNames: [],
   trackIndex: 0,
   hasChordNames: false,
+  audioDelayMs: loadAudioDelay(),
   noteEvents: [],
   barMarkers: [],
 };
@@ -125,8 +167,9 @@ function makeExternalMediaHandler(el: HTMLAudioElement): synth.IExternalMediaHan
       // Volume is owned by the guitar on/off crossfade, not alphaTab.
     },
     seekTo(time: number): void {
-      el.currentTime = time / 1000;
-      if (noGuitarAudio) noGuitarAudio.currentTime = time / 1000;
+      const seconds = Math.max(0, (time + syncOffsetMs()) / 1000);
+      el.currentTime = seconds;
+      if (noGuitarAudio) noGuitarAudio.currentTime = noGuitarTimeFor(seconds);
     },
     play(): void {
       // Safari (and iOS especially) refuses playback that didn't come from a
@@ -265,7 +308,7 @@ export function setFollowerPlayback(isPlaying: boolean, audioSeconds: number): v
   if (!mainAudio) return;
   if (Math.abs(mainAudio.currentTime - audioSeconds) > 0.15) {
     mainAudio.currentTime = audioSeconds;
-    if (noGuitarAudio) noGuitarAudio.currentTime = audioSeconds;
+    if (noGuitarAudio) noGuitarAudio.currentTime = noGuitarTimeFor(audioSeconds);
   }
   if (isPlaying && mainAudio.paused) {
     void mainAudio.play();
@@ -362,6 +405,9 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
   noGuitarObjectUrl = null;
 
   countInToken++;
+  // A dropped file has no manifest entry, so no per-song corrections.
+  songOffsetMs = 0;
+  noGuitarOffsetSec = 0;
   Object.assign(state, {
     ready: false,
     isPlaying: false,
@@ -433,7 +479,8 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
       // the small gap on loop-back — this only trims the detection delay on
       // top of that, not the decode itself.
       positionLoopId = window.setInterval(() => {
-        output.updatePosition(mainAudio!.currentTime * 1000);
+        output.updatePosition(mainAudio!.currentTime * 1000 - syncOffsetMs());
+        keepNoGuitarAligned();
         updateFromPlayback();
       }, 20);
 
@@ -678,23 +725,67 @@ function forceCursorToCurrentTick(): void {
 /**
  * Seeks the recording itself rather than asking alphaTab for a *tick*
  * position: ticks round to the nearest sync point, which can be seconds away
- * and made dragging the progress bar feel like it was ignoring you. Setting
- * the audio element directly keeps the audio and the highway (which reads
- * its own clock, not alphaTab's) exactly where the thumb is; `timePosition`
- * is only set afterwards so alphaTab's own tick bookkeeping (and the score
- * cursor, forced below) agrees with it.
+ * and made dragging the progress bar feel like it was ignoring you.
+ *
+ * alphaTab is then told the new audio position the same way playback tells
+ * it, through `updatePosition`. It used to be told through `timePosition`
+ * instead, but that is alphaTab's own synth time, not the recording's — it
+ * converted it through the sync points and moved the audio again, which on
+ * a padded file like R U Mine left the audio a second away from the thumb.
  */
 export function seekToSeconds(seconds: number): void {
   if (!mainAudio) return;
   const duration = Number.isFinite(mainAudio.duration) ? mainAudio.duration : seconds;
   const clamped = Math.min(Math.max(seconds, 0), duration);
   mainAudio.currentTime = clamped;
-  if (noGuitarAudio) noGuitarAudio.currentTime = clamped;
-  mediaOutput?.updatePosition(clamped * 1000);
-  if (api) {
-    api.timePosition = clamped * 1000;
-    forceCursorToCurrentTick();
+  if (noGuitarAudio) noGuitarAudio.currentTime = noGuitarTimeFor(clamped);
+  mediaOutput?.updatePosition(clamped * 1000 - syncOffsetMs());
+  forceCursorToCurrentTick();
+  updateFromPlayback();
+}
+
+/**
+ * Two recordings in two audio elements drift apart over a few minutes. The
+ * silent one is pulled back as soon as it wanders; the audible one only when
+ * it is far enough out to hear, since every correction is a small skip.
+ */
+function keepNoGuitarAligned(): void {
+  if (!mainAudio || !noGuitarAudio || mainAudio.paused || noGuitarAudio.paused) return;
+  const target = noGuitarTimeFor(mainAudio.currentTime);
+  const drift = Math.abs(noGuitarAudio.currentTime - target);
+  const noGuitarAudible = !state.guitarOn;
+  if (drift > (noGuitarAudible ? NO_GUITAR_DRIFT_SEC * 2.5 : NO_GUITAR_DRIFT_SEC)) noGuitarAudio.currentTime = target;
+}
+
+/**
+ * Per-song corrections from the library manifest: the whole file's offset,
+ * and how late the no-guitar recording runs against the main one.
+ */
+export function setSongOffsets(audioOffsetSeconds = 0, noGuitarOffsetSeconds = 0): void {
+  songOffsetMs = audioOffsetSeconds * 1000;
+  noGuitarOffsetSec = noGuitarOffsetSeconds;
+  if (mainAudio && noGuitarAudio) noGuitarAudio.currentTime = noGuitarTimeFor(mainAudio.currentTime);
+  resyncPosition();
+}
+
+/** Sets this device's audio delay (see syncOffsetMs) and remembers it. */
+export function setAudioDelay(ms: number): void {
+  state.audioDelayMs = Math.round(Math.max(-AUDIO_DELAY_LIMIT_MS, Math.min(AUDIO_DELAY_LIMIT_MS, ms)));
+  try {
+    if (state.audioDelayMs === 0) localStorage.removeItem(AUDIO_DELAY_KEY);
+    else localStorage.setItem(AUDIO_DELAY_KEY, String(state.audioDelayMs));
+  } catch {
+    // Blocked storage — the delay just lasts for this session.
   }
+  resyncPosition();
+  notify();
+}
+
+/** Re-reads the audio clock through the current offsets, so a change shows even while paused. */
+function resyncPosition(): void {
+  if (!mainAudio || !mediaOutput) return;
+  mediaOutput.updatePosition(mainAudio.currentTime * 1000 - syncOffsetMs());
+  forceCursorToCurrentTick();
   updateFromPlayback();
 }
 
@@ -758,7 +849,7 @@ export async function setNoGuitarTrack(file: File): Promise<void> {
     noGuitarAudio.playbackRate = mainAudio.playbackRate;
   }
   noGuitarAudio.src = noGuitarObjectUrl;
-  noGuitarAudio.currentTime = mainAudio.currentTime;
+  noGuitarAudio.currentTime = noGuitarTimeFor(mainAudio.currentTime);
   if (!mainAudio.paused) void noGuitarAudio.play();
   state.hasNoGuitarTrack = true;
   state.guitarOn = true;

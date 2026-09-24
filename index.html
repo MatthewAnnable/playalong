@@ -114,6 +114,16 @@
         </div>
         <input id="speed-slider" type="range" min="50" max="120" step="5" value="100" hidden />
 
+        <div
+          class="stepper stepper-sync"
+          aria-label="Audio delay"
+          title="Audio delay for this device. If notes reach the play line before you hear them (common on Bluetooth headphones), press +. If they arrive after, press −."
+        >
+          <button id="delay-down-button" class="stepper-btn" type="button" aria-label="Less audio delay">−</button>
+          <span id="delay-value" class="stepper-value">Sync 0</span>
+          <button id="delay-up-button" class="stepper-btn" type="button" aria-label="More audio delay">+</button>
+        </div>
+
         <div class="loop-chip" id="loop-chip">
           <input id="loop-toggle" type="checkbox" hidden />
           <span class="loop-chip-label"

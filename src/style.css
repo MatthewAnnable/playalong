@@ -486,6 +486,11 @@
   color: var(--ma-ink);
 }
 
+.stepper-sync .stepper-value {
+  min-width: 84px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Loop chip */
 
 .loop-chip {

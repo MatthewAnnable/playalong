@@ -8,6 +8,8 @@ export type ActionId =
   | 'speedDown'
   | 'speedUp'
   | 'speedReset'
+  | 'delayDown'
+  | 'delayUp'
   | 'guitarToggle'
   | 'viewHighway'
   | 'viewScore'
@@ -25,6 +27,8 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   speedDown: 'Speed −5%',
   speedUp: 'Speed +5%',
   speedReset: 'Speed 100%',
+  delayDown: 'Audio delay −10ms (notes earlier)',
+  delayUp: 'Audio delay +10ms (notes later)',
   guitarToggle: 'Guitar on / off',
   viewHighway: 'Highway view',
   viewScore: 'Score view',
@@ -43,6 +47,8 @@ const DEFAULT_KEYS: Record<ActionId, string> = {
   speedDown: '-',
   speedUp: '=',
   speedReset: '0',
+  delayDown: ',',
+  delayUp: '.',
   guitarToggle: 'g',
   viewHighway: 'h',
   viewScore: 's',
