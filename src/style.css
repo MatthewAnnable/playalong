@@ -216,6 +216,13 @@
   cursor: pointer;
 }
 
+/* display: flex above would otherwise beat the hidden attribute, which is how
+   "Audio from OBS" (remote tab only) and "Guitar" (songs with a no-guitar
+   track only) are switched off. */
+.control-checkbox[hidden] {
+  display: none;
+}
+
 .control-checkbox input {
   accent-color: var(--ma-green);
   width: 18px;
@@ -902,6 +909,71 @@ body:has(#app.obs) {
   }
 
   .stepper-btn {
-    width: 36px;
+    width: 32px;
+  }
+
+  .stepper-value {
+    min-width: 48px;
+  }
+
+  .loop-chip {
+    padding: 0 4px 0 12px;
+  }
+
+  .loop-bar-input {
+    width: 2em;
+  }
+}
+
+/* Phones: the rail was one fixed 80px row, which squashed the song title to
+   "R…" and pushed the action links 40px past the screen edge. Here it stacks —
+   song, then view/track/options, then the action links — and every row wraps
+   inside the screen. */
+@media (max-width: 760px) {
+  .app-header {
+    height: auto;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 6px;
+    column-gap: 12px;
+    padding: 12px 0 10px;
+  }
+
+  .rail-song {
+    flex: 1 1 0;
+  }
+
+  .rail-song h1 {
+    font-size: 22px;
+  }
+
+  .rail-controls {
+    flex-basis: 100%;
+    gap: 4px 14px;
+  }
+
+  #track-select {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .rail-actions {
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .btn-text-green {
+    padding: 0 6px;
+    font-size: 13px;
+  }
+}
+
+/* Keyboard shortcuts mean nothing on a touch-only screen, and dropping the
+   button lets the other three actions sit on one line. */
+@media (max-width: 760px) and (hover: none) and (pointer: coarse) {
+  #shortcuts-button {
+    display: none;
   }
 }
