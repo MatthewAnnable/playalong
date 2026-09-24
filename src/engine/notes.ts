@@ -8,6 +8,12 @@ export interface NoteEvent {
   /** Where the plain pill ends and the tie sustain bar begins, if this note carries ties. */
   tieBarStartTick?: number;
   bar: number;
+  /**
+   * Which pass through the timeline this note was laid out in. A bar inside a
+   * repeat is written once but played several times, and each time is its
+   * own pass — anything that groups notes "by bar" must group by this.
+   */
+  pass: number;
   beatIndex: number;
   /** 1 = high E … 6 = low E — alphaTab numbers strings from the bottom, this flips it. */
   string: number;
@@ -231,6 +237,7 @@ export function extractNotes(track: model.Track, timeline: PlayedBar[] = linearT
           startTick,
           endTick,
           bar: bar.index + 1,
+          pass,
           beatIndex,
           string: stringCount - note.string + 1,
           fret: note.isDead ? -1 : note.fret,

@@ -117,4 +117,19 @@ describe('extractNotes with repeats', () => {
     // The last note is near the end of the unrolled song, not the written one.
     expect(events.at(-1)!.startTick).toBeGreaterThan(score.masterBars.at(-1)!.start);
   });
+
+  it('guesses the same fingers on every pass through a repeat as on the written bar', () => {
+    const score = importer.ScoreLoader.loadScoreFromBytes(new Uint8Array(readFileSync(R_U_MINE_PATH)));
+    const written = extractNotes(score.tracks[0]);
+    applyFingeringHeuristic(written);
+    const fingerOf = new Map(written.map((e) => [`${e.bar}:${e.beatIndex}:${e.string}`, e.finger]));
+
+    const played = extractNotes(score.tracks[0], buildTimeline(score));
+    applyFingeringHeuristic(played);
+    const mismatched = played.filter((e) => {
+      const expected = fingerOf.get(`${e.bar}:${e.beatIndex}:${e.string}`);
+      return expected !== undefined && expected !== e.finger;
+    });
+    expect(mismatched).toEqual([]);
+  });
 });

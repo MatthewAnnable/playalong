@@ -4,8 +4,9 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+/** Notes struck at the same moment. Bar and beat alone would lump every pass through a repeat together. */
 function chordKey(e: NoteEvent): string {
-  return `${e.bar}:${e.beatIndex}`;
+  return `${e.pass}:${e.beatIndex}`;
 }
 
 /**
@@ -17,10 +18,13 @@ function chordKey(e: NoteEvent): string {
 export function applyFingeringHeuristic(events: NoteEvent[]): void {
   const guessed = events.filter((e) => e.fingerSource === 'guess');
 
+  // One group per bar *as played*: pooling every pass through a repeated bar
+  // widened its fret span and turned the same beat across passes into a
+  // fake chord, which scrambled the guesses.
   const byBar = new Map<number, NoteEvent[]>();
   for (const e of guessed) {
-    if (!byBar.has(e.bar)) byBar.set(e.bar, []);
-    byBar.get(e.bar)!.push(e);
+    if (!byBar.has(e.pass)) byBar.set(e.pass, []);
+    byBar.get(e.pass)!.push(e);
   }
 
   for (const barEvents of byBar.values()) {
