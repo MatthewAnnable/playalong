@@ -846,14 +846,25 @@
 #app.obs .app-header,
 #app.obs .drop-zone,
 #app.obs .recent-songs,
-#app.obs .status,
-#app.obs .alphatab-surface {
+#app.obs .status {
   display: none;
 }
 
 #app.obs .highway-header {
   display: flex;
   text-shadow: var(--stage-header-text-shadow, 0 1px 3px rgba(0, 0, 0, 0.8));
+}
+
+/* Score-as-overlay: presentation mode's notation colours read fine on a
+   transparent stage too, it just needs the dark backdrop dropped, and the
+   bottom padding presentation reserves for the transport dock isn't needed
+   since OBS hides the dock outright. */
+#app.obs .alphatab-surface {
+  background: transparent;
+}
+
+#app.obs .alphatab-surface.is-horizontal {
+  padding: 6vh 0;
 }
 
 body:has(#app.obs) {

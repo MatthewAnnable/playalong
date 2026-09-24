@@ -4,6 +4,7 @@ import {
   openScore,
   setFollowerPlayback,
   setMuted,
+  setPresentationMode,
   setTrackIndex,
   stopLocalPositionLoop,
 } from '../engine/alphatab';
@@ -44,6 +45,19 @@ function initObsMode(): void {
   applyTransparentStage();
   setHighwayObsMode(true);
   setHighwayView(true);
+
+  // The score can be an overlay too, not just the highway (press 's'):
+  // the same light-on-dark notation and horizontal scrolling line as
+  // pressing Presentation in the normal app, just on a transparent stage
+  // instead of a dark one. This has to wait until a score actually exists —
+  // setPresentationMode is a no-op before the first openScore — so it's
+  // applied on each rising edge of `ready` rather than once up front here,
+  // which also re-applies it for every song a remote later switches to.
+  let wasReady = false;
+  onStateChange((state) => {
+    if (state.ready && !wasReady) setPresentationMode(true);
+    wasReady = state.ready;
+  });
 
   // A `song` in the URL is a standalone preview: OBS loads and plays that
   // song by itself — audio included, so OBS's own "Control audio via OBS"
