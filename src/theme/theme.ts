@@ -48,6 +48,10 @@ export interface ThemeGeometry {
   legatoJoinOutline?: 'union' | 'per-pill';
   /** Px of overlap at a legato seam before the union path is built — drawing only, never width or timing. */
   legatoSeamOverlap: number;
+  /** Width of the straight divider at a legato seam; 0 draws the pair as one unbroken block. */
+  legatoSeamDivider?: number;
+  /** Opacity of that divider, so it reads lighter than the outline. */
+  legatoSeamDividerOpacity?: number;
   /** Dark halo behind every cream mark. */
   markHaloWidth?: number;
   /** The slide contour rail: stroke weight, level spacing, plateau rules. */

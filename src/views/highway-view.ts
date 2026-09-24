@@ -21,12 +21,10 @@ const STAGE_BASELINE_HEIGHT = 1080;
  * - `nick`  — consecutive, but picked one at a time: a sliver of stage ground
  *   between them, so a run can be counted.
  * - `touch` — one pick for both notes (hammer-on, pull-off, legato slide).
- *   The pills butt flush, full height, edge to edge — no bridge element.
- *   Their own corner radii pinch the seam into two small notches, and the
- *   pair is stroked once as the union of the two shapes, so no keyline
- *   crosses the seam. The notches must stay visible: a slide is made with
- *   one finger, so both pills carry the same colour, and 1 sliding to 2
- *   must never read as "12".
+ *   The pair is one solid rectangle, rounded only at its outer ends like any
+ *   pill: square corners at the seam, full height, no notch, no bridge. The
+ *   seam carries a thin straight divider instead (`legatoSeamDivider`) —
+ *   both notes often share a colour, and 1 into 2 must never read as "12".
  */
 type Join = 'none' | 'nick' | 'touch';
 
@@ -539,10 +537,8 @@ export class HighwayView {
       w: idx < chain.length - 1 ? chain[idx + 1].x - item.x : item.w,
     }));
 
-    // Clipped to the union path: an unclipped fill is a plain rectangle, which
-    // pokes past the union's rounded outer corners and squares off the notch
-    // the outline traces at the seam — the keyline then reads as a stray dark
-    // line cutting across solid colour instead of the edge of it.
+    // Clipped to the chain's outline: an unclipped fill is a plain rectangle,
+    // which pokes past the rounded outer corners.
     ctx.save();
     this.unionRoundRectPath(cells, top, pillH, r);
     ctx.clip();
@@ -557,6 +553,24 @@ export class HighwayView {
       ctx.fillRect(fx, top, fw, pillH);
     }
     ctx.restore();
+
+    // A straight divider at each seam, so two notes sharing a colour still
+    // read as two numbers. Lighter than the outline, and drawn before it so
+    // the outline's own edge stays clean where they meet.
+    const dividerWidth = this.px(theme.geometry.legatoSeamDivider ?? 0);
+    if (dividerWidth > 0) {
+      ctx.save();
+      ctx.strokeStyle = theme.keyline;
+      ctx.globalAlpha = theme.geometry.legatoSeamDividerOpacity ?? 0.55;
+      ctx.lineWidth = dividerWidth;
+      ctx.beginPath();
+      for (let idx = 1; idx < cells.length; idx++) {
+        ctx.moveTo(cells[idx].x, top);
+        ctx.lineTo(cells[idx].x, top + pillH);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
 
     ctx.save();
     this.unionRoundRectPath(cells, top, pillH, r);
@@ -574,43 +588,17 @@ export class HighwayView {
     }
   }
 
-  /** Traces the outer boundary of N flush, same-height rounded cells as one path — no stroke crosses an interior seam. */
+  /**
+   * Traces N flush, same-height cells as one rectangle: rounded at the two
+   * outer ends only, straight top and bottom edges across every seam.
+   */
   private unionRoundRectPath(cells: { x: number; w: number }[], top: number, height: number, radius: number): void {
-    const ctx = this.ctx;
     const rad = (w: number) => Math.max(0, Math.min(radius, w / 2, height / 2));
-    ctx.beginPath();
-    ctx.moveTo(cells[0].x + rad(cells[0].w), top);
-    for (let i = 0; i < cells.length; i++) {
-      const c = cells[i];
-      const rightX = c.x + c.w;
-      const r0 = rad(c.w);
-      ctx.lineTo(rightX - r0, top);
-      ctx.arcTo(rightX, top, rightX, top + r0, r0);
-      if (i < cells.length - 1) {
-        const r1 = rad(cells[i + 1].w);
-        ctx.arcTo(rightX, top, rightX + r1, top, r1);
-      }
-    }
-    const last = cells[cells.length - 1];
-    const lastR = rad(last.w);
-    const rightX = last.x + last.w;
-    ctx.lineTo(rightX, top + height - lastR);
-    ctx.arcTo(rightX, top + height, rightX - lastR, top + height, lastR);
-    for (let i = cells.length - 1; i >= 0; i--) {
-      const c = cells[i];
-      const r0 = rad(c.w);
-      ctx.lineTo(c.x + r0, top + height);
-      ctx.arcTo(c.x, top + height, c.x, top + height - r0, r0);
-      if (i > 0) {
-        const r1 = rad(cells[i - 1].w);
-        ctx.arcTo(c.x, top + height, c.x - r1, top + height, r1);
-      }
-    }
     const first = cells[0];
-    const firstR = rad(first.w);
-    ctx.lineTo(first.x, top + firstR);
-    ctx.arcTo(first.x, top, first.x + firstR, top, firstR);
-    ctx.closePath();
+    const last = cells[cells.length - 1];
+    const left = rad(first.w);
+    const right = rad(last.w);
+    this.roundRectPath(first.x, top, last.x + last.w - first.x, height, left, right, right, left);
   }
 
   private drawPill(item: Placed): void {
