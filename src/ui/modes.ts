@@ -41,13 +41,22 @@ function applyTransparentStage(): void {
 
 function initObsMode(): void {
   appEl.classList.add('obs', 'presentation');
-  setMuted(true);
   applyTransparentStage();
   setHighwayObsMode(true);
+  setHighwayView(true);
 
+  // A `song` in the URL is a standalone preview: OBS loads and plays that
+  // song by itself — audio included, so OBS's own "Control audio via OBS"
+  // can pick it up — driven by the same local clock as every other view.
+  // No /remote tab needed; play/pause, bar nudging and the rest come from
+  // OBS's Interact window through the ordinary keyboard shortcuts. This is
+  // for trying the transparent look before wiring up a real remote-driven
+  // setup, which is what the rest of this function is for.
+  if (new URLSearchParams(location.search).has('song')) return;
+
+  setMuted(true);
   const clock = new RemoteClock();
   setTickSource(() => clock.currentTick());
-  setHighwayView(true);
 
   let audioMaster: 'remote' | 'obs' = 'remote';
 
