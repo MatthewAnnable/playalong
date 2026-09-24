@@ -386,6 +386,11 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
   const settings = new Settings();
   settings.player.playerMode = PlayerMode.EnabledExternalMedia;
   settings.player.scrollElement = container;
+  // alphaTab looks for its music font next to its own script, which a build
+  // puts under assets/ — but the font is served from public/font/. Under a
+  // subpath (GitHub Pages at /playalong/) that 404'd and alphaTab refused to
+  // draw the score at all, so point it at the font directly.
+  settings.core.fontDirectory = `${import.meta.env.BASE_URL}font/`;
   settings.display.staveProfile = state.tabOnly ? StaveProfile.Tab : StaveProfile.ScoreTab;
 
   api = new AlphaTabApi(container, settings);
