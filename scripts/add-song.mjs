@@ -63,4 +63,27 @@ manifest.songs.sort((a, b) => a.title.localeCompare(b.title));
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
 console.log(`Added "${title}"${artist ? ` by ${artist}` : ''} as "${slug}".`);
+
+// A variable-bitrate MP3 can't be seeked accurately in a browser: after any
+// scrub, loop or start from a bar, the audio lands a couple of hundred ms
+// from where the player thinks it is, and the highway and score drift out of
+// step with what you hear. R U Mine's recording was one. A VBR file carries a
+// "Xing" header; a constant-bitrate one says "Info" or nothing.
+const audio = score.backingTrack?.rawAudioFile;
+if (audio && isVariableBitrateMp3(audio)) {
+  console.warn('');
+  console.warn('WARNING: the audio in this file is a variable-bitrate MP3, so it will drift out');
+  console.warn('of sync after seeking. Re-encode it at a constant bitrate (for example');
+  console.warn('`ffmpeg -i in.mp3 -c:a libmp3lame -b:a 256k out.mp3`) and put it back into the');
+  console.warn('.gp file (or re-import it in Guitar Pro) before using this song.');
+}
+
+function isVariableBitrateMp3(bytes) {
+  let start = 0;
+  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+    start = 10 + ((bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9]);
+  }
+  const head = Buffer.from(bytes.subarray(start, start + 2000)).toString('latin1');
+  return head.includes('Xing') || head.includes('VBRI');
+}
 console.log(`Practice links can now use ?song=${slug}`);
