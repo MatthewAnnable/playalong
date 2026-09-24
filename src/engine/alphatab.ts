@@ -28,8 +28,6 @@ export interface EngineState {
   trackIndex: number;
   /** True when the file names chords, which is what decides the chord-pill default. */
   hasChordNames: boolean;
-  /** This device's audio delay, in ms: how far the highway and score are held back to meet the sound. */
-  audioDelayMs: number;
   noteEvents: NoteEvent[];
   barMarkers: BarMarker[];
 }
@@ -40,34 +38,30 @@ const CROSSFADE_MS = 80;
  * Sync offsets. alphaTab's clock and the audio element's clock are the same
  * clock shifted by `syncOffsetMs()`: alphaTab time = audio time − offset.
  *
- * - The device delay is how late the sound reaches the ear after the browser
- *   says it has played it — a few ms on speakers, 100–250ms over Bluetooth or
- *   a Zoom/OBS route. No browser reports it reliably, so it is set by ear and
- *   remembered per device.
  * - The song offset is the manifest's `audioOffsetSeconds`, for a file whose
- *   own sync points are off.
+ *   own sync points are off. 0 unless a song says otherwise.
  * - The no-guitar offset is how far a separately made no-guitar recording
  *   lags the main one (R U Mine's is 60ms late), so the two are started that
- *   far apart and stay interchangeable.
+ *   far apart and stay interchangeable. Also per song, also 0 by default.
+ *
+ * A per-device delay for speakers/Bluetooth was tried and shelved; this is
+ * where it would add in.
  */
-const AUDIO_DELAY_KEY = 'playalong.audioDelayMs';
-export const AUDIO_DELAY_LIMIT_MS = 400;
 let songOffsetMs = 0;
 let noGuitarOffsetSec = 0;
 /** How far the silent recording may wander from the audible one before it is pulled back. */
 const NO_GUITAR_DRIFT_SEC = 0.04;
 
-function loadAudioDelay(): number {
-  try {
-    const value = Number(localStorage.getItem(AUDIO_DELAY_KEY));
-    return Number.isFinite(value) ? Math.max(-AUDIO_DELAY_LIMIT_MS, Math.min(AUDIO_DELAY_LIMIT_MS, value)) : 0;
-  } catch {
-    return 0;
-  }
+// The shelved per-device delay was saved here. Clear it so a value set while
+// it existed can't come back if the setting ever returns.
+try {
+  localStorage.removeItem('playalong.audioDelayMs');
+} catch {
+  // Blocked storage — nothing was saved either.
 }
 
 function syncOffsetMs(): number {
-  return state.audioDelayMs + songOffsetMs;
+  return songOffsetMs;
 }
 
 /** Where the no-guitar recording should be for a given main-recording time. */
@@ -114,7 +108,6 @@ const state: EngineState = {
   trackNames: [],
   trackIndex: 0,
   hasChordNames: false,
-  audioDelayMs: loadAudioDelay(),
   noteEvents: [],
   barMarkers: [],
 };
@@ -766,19 +759,6 @@ export function setSongOffsets(audioOffsetSeconds = 0, noGuitarOffsetSeconds = 0
   noGuitarOffsetSec = noGuitarOffsetSeconds;
   if (mainAudio && noGuitarAudio) noGuitarAudio.currentTime = noGuitarTimeFor(mainAudio.currentTime);
   resyncPosition();
-}
-
-/** Sets this device's audio delay (see syncOffsetMs) and remembers it. */
-export function setAudioDelay(ms: number): void {
-  state.audioDelayMs = Math.round(Math.max(-AUDIO_DELAY_LIMIT_MS, Math.min(AUDIO_DELAY_LIMIT_MS, ms)));
-  try {
-    if (state.audioDelayMs === 0) localStorage.removeItem(AUDIO_DELAY_KEY);
-    else localStorage.setItem(AUDIO_DELAY_KEY, String(state.audioDelayMs));
-  } catch {
-    // Blocked storage — the delay just lasts for this session.
-  }
-  resyncPosition();
-  notify();
 }
 
 /** Re-reads the audio clock through the current offsets, so a change shows even while paused. */

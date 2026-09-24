@@ -2,7 +2,6 @@ import {
   nudgeBar,
   onStateChange,
   seekToSeconds,
-  setAudioDelay,
   setLoop,
   setSpeed,
   setTabOnly,
@@ -25,11 +24,6 @@ const speedSlider = document.querySelector<HTMLInputElement>('#speed-slider')!;
 const speedValue = document.querySelector<HTMLSpanElement>('#speed-value')!;
 const speedDownButton = document.querySelector<HTMLButtonElement>('#speed-down-button')!;
 const speedUpButton = document.querySelector<HTMLButtonElement>('#speed-up-button')!;
-const delayValue = document.querySelector<HTMLSpanElement>('#delay-value')!;
-const delayDownButton = document.querySelector<HTMLButtonElement>('#delay-down-button')!;
-const delayUpButton = document.querySelector<HTMLButtonElement>('#delay-up-button')!;
-/** One press of the audio-delay stepper — about a 64th note at 100 bpm, small enough to dial in by ear. */
-const DELAY_STEP_MS = 10;
 const loopChip = document.querySelector<HTMLDivElement>('#loop-chip')!;
 const loopClearButton = document.querySelector<HTMLButtonElement>('#loop-clear-button')!;
 const loopToggle = document.querySelector<HTMLInputElement>('#loop-toggle')!;
@@ -64,9 +58,74 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+let dockTimer = 0;
+let lastPointer: { x: number; y: number } | null = null;
+/** Where the pointer was when the dock last hid — mouse moves are measured from here. */
+let hiddenAt: { x: number; y: number } | null = null;
+
+function isPresentation(): boolean {
+  return appEl.classList.contains('presentation');
+}
+
+function isRunning(): boolean {
+  return !!currentState && (currentState.isPlaying || currentState.countingIn);
+}
+
+function isHidden(): boolean {
+  return appEl.classList.contains('chrome-hidden');
+}
+
+function hideDock(): void {
+  window.clearTimeout(dockTimer);
+  if (!isPresentation() || !isRunning()) return;
+  hiddenAt = lastPointer;
+  appEl.classList.add('chrome-hidden');
+}
+
+/** Shows the dock; while the song runs it hides again after DOCK_IDLE_HIDE_MS, and while paused it stays. */
+function showDock(): void {
+  appEl.classList.remove('chrome-hidden');
+  scheduleDockHide();
+}
+
+function scheduleDockHide(): void {
+  window.clearTimeout(dockTimer);
+  if (isPresentation() && isRunning()) dockTimer = window.setTimeout(hideDock, DOCK_IDLE_HIDE_MS);
+}
+
+/** How long the presentation dock stays up after the last sign of life, while the song is running. */
+const DOCK_IDLE_HIDE_MS = 1000;
+/**
+ * How far the pointer has to travel from where it was when the dock hid
+ * before a mouse move brings it back. A hand resting on the mouse after
+ * pressing Play jiggles it a few pixels, and that alone was enough to hold
+ * the dock over the bottom strings while the song started.
+ */
+const DOCK_WAKE_DISTANCE_PX = 30;
+/**
+ * Between the count-in's last click and the audio starting there is a moment
+ * where the song is neither counting in nor playing. Waiting this long before
+ * treating that as "stopped" keeps the dock from flashing up at the downbeat.
+ */
+const DOCK_STOP_GRACE_MS = 250;
+
 export function initControls(): void {
+  let wasRunning = false;
+  let stopTimer = 0;
   onStateChange((state) => {
     currentState = state;
+    // The dock gets out of the way the moment a song starts (count-in
+    // included), and comes back to stay when it stops.
+    const running = state.isPlaying || state.countingIn;
+    if (running && !wasRunning) {
+      window.clearTimeout(stopTimer);
+      hideDock();
+    } else if (!running && wasRunning) {
+      stopTimer = window.setTimeout(() => {
+        if (!isRunning()) showDock();
+      }, DOCK_STOP_GRACE_MS);
+    }
+    wasRunning = running;
     setText(playButtonLabel, state.countingIn ? 'Counting in…' : state.isPlaying ? 'Pause' : 'Play');
     if (playButton.disabled === state.ready) playButton.disabled = !state.ready;
 
@@ -84,7 +143,6 @@ export function initControls(): void {
 
     speedSlider.value = String(state.speed);
     setText(speedValue, `${state.speed}%`);
-    setText(delayValue, state.audioDelayMs === 0 ? 'Sync 0' : `Sync ${state.audioDelayMs > 0 ? '+' : '−'}${Math.abs(state.audioDelayMs)}ms`);
 
     loopToggle.checked = state.loopEnabled;
     loopChip.classList.toggle('is-disabled', !state.loopEnabled);
@@ -178,11 +236,6 @@ export function initControls(): void {
   speedDownButton.addEventListener('click', () => setSpeed(Math.max(Number(speedSlider.value) - 5, 50)));
   speedUpButton.addEventListener('click', () => setSpeed(Math.min(Number(speedSlider.value) + 5, 120)));
 
-  delayDownButton.addEventListener('click', () => setAudioDelay(currentState.audioDelayMs - DELAY_STEP_MS));
-  delayUpButton.addEventListener('click', () => setAudioDelay(currentState.audioDelayMs + DELAY_STEP_MS));
-  // Double-clicking the readout puts the delay back to none.
-  delayValue.addEventListener('dblclick', () => setAudioDelay(0));
-
   function applyLoopFromInputs(): void {
     setLoop(Number(loopStart.value) || 1, Number(loopEnd.value) || 1, loopToggle.checked);
   }
@@ -209,32 +262,46 @@ export function initControls(): void {
     setTrackIndex(Number(trackSelect.value));
   });
 
-  let idleTimer = 0;
-  function resetIdleTimer(): void {
-    appEl.classList.remove('chrome-hidden');
-    window.clearTimeout(idleTimer);
-    idleTimer = window.setTimeout(() => {
-      if (appEl.classList.contains('presentation')) appEl.classList.add('chrome-hidden');
-    }, 2000);
-  }
-
   function togglePresentation(force?: boolean): void {
     const on = force ?? !appEl.classList.contains('presentation');
     appEl.classList.toggle('presentation', on);
     setPresentationMode(on);
-    if (on) resetIdleTimer();
+    if (on) showDock();
     else appEl.classList.remove('chrome-hidden');
   }
 
   presentationButton.addEventListener('click', () => togglePresentation());
-  // Any sign of life brings the dock back, not just a moved mouse: pressing a
-  // faded control has to count, or the press that wakes the dock is the press
-  // that gets swallowed.
-  for (const event of ['mousemove', 'pointerdown', 'keydown', 'wheel'] as const) {
-    appEl.addEventListener(event, () => {
-      if (appEl.classList.contains('presentation')) resetIdleTimer();
-    });
+  // Any sign of life brings the dock back: pressing a faded control has to
+  // count, or the press that wakes the dock is the press that gets swallowed.
+  // A moved mouse only counts once it has really moved (DOCK_WAKE_DISTANCE_PX).
+  appEl.addEventListener('pointerdown', (e) => {
+    lastPointer = { x: e.clientX, y: e.clientY };
+    // The play button starts the song on this same pointerdown, before it
+    // bubbles up here — waking the dock now would undo the hide that playing
+    // just did. Starting and stopping already hide and show it.
+    if (playButton.contains(e.target as Node)) {
+      if (isHidden()) hiddenAt = lastPointer;
+      return;
+    }
+    showDock();
+  });
+  for (const event of ['keydown', 'wheel'] as const) {
+    appEl.addEventListener(event, () => showDock());
   }
+  appEl.addEventListener('mousemove', (e) => {
+    lastPointer = { x: e.clientX, y: e.clientY };
+    if (!isHidden()) {
+      scheduleDockHide();
+      return;
+    }
+    // Hidden before the pointer's position was ever known: this move is
+    // where it rests, not a move away from it.
+    if (!hiddenAt) {
+      hiddenAt = lastPointer;
+      return;
+    }
+    if (Math.hypot(e.clientX - hiddenAt.x, e.clientY - hiddenAt.y) > DOCK_WAKE_DISTANCE_PX) showDock();
+  });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && appEl.classList.contains('presentation')) togglePresentation(false);
   });
@@ -250,8 +317,6 @@ export function initControls(): void {
   registerAction('speedDown', () => setSpeed(Math.max(currentState.speed - 5, 50)));
   registerAction('speedUp', () => setSpeed(Math.min(currentState.speed + 5, 120)));
   registerAction('speedReset', () => setSpeed(100));
-  registerAction('delayDown', () => setAudioDelay(currentState.audioDelayMs - DELAY_STEP_MS));
-  registerAction('delayUp', () => setAudioDelay(currentState.audioDelayMs + DELAY_STEP_MS));
   registerAction('guitarToggle', () => setGuitarOn(!currentState.guitarOn));
   registerAction('presentationToggle', () => togglePresentation());
   registerAction('nextTrack', () => {

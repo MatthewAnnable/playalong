@@ -426,6 +426,12 @@
   display: none;
 }
 
+/* Bar counter, speed and loop. On a wide screen the group isn't there as far
+   as layout goes; on a narrow one it becomes the dock's second row. */
+.dock-group {
+  display: contents;
+}
+
 .time {
   font-family: var(--ma-font-mono);
   font-size: var(--ma-size-fine);
@@ -484,11 +490,6 @@
   font-weight: 700;
   font-size: 15px;
   color: var(--ma-ink);
-}
-
-.stepper-sync .stepper-value {
-  min-width: 84px;
-  font-variant-numeric: tabular-nums;
 }
 
 /* Loop chip */
@@ -751,7 +752,7 @@
   background: rgba(13, 17, 11, 0.9);
   border: none;
   justify-content: center;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.15s ease;
 }
 
 /* Faded, but still there to be pressed. When the dock also stopped taking
@@ -850,4 +851,57 @@
 
 body:has(#app.obs) {
   background: transparent;
+}
+
+/* Narrow screens: the dock is two rows — play and the scrubber, then the bar
+   counter, speed and loop — instead of one row that ran off the right edge
+   (it needed about 900px). */
+@media (max-width: 1000px) {
+  #app {
+    padding-bottom: 176px;
+  }
+
+  .transport-dock,
+  #app.presentation .transport-dock {
+    height: auto;
+    flex-wrap: wrap;
+    row-gap: 10px;
+    column-gap: 14px;
+    padding: 12px 16px;
+  }
+
+  #app.presentation .transport-dock {
+    border-radius: 28px;
+    bottom: 16px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .dock-group {
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .scrubber {
+    min-width: 60px;
+  }
+}
+
+
+@media (max-width: 480px) {
+  .transport-dock,
+  #app.presentation .transport-dock {
+    column-gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .dock-group {
+    gap: 8px;
+  }
+
+  .stepper-btn {
+    width: 36px;
+  }
 }
