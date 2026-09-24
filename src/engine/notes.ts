@@ -1,5 +1,6 @@
 import { model } from '@coderline/alphatab';
 import { nameChord } from './chords';
+import { linearTimeline, type PlayedBar } from './timeline';
 
 export interface NoteEvent {
   startTick: number;
@@ -51,11 +52,12 @@ export interface BarMarker {
   sectionText?: string;
 }
 
-export function extractBarMarkers(score: model.Score): BarMarker[] {
-  return score.masterBars.map((bar) => ({
-    tick: bar.start,
-    barNumber: bar.index + 1,
-    sectionText: bar.section?.text || undefined,
+/** One marker per bar *played*, so a repeated bar is marked every time round. */
+export function extractBarMarkers(timeline: PlayedBar[]): BarMarker[] {
+  return timeline.map((played) => ({
+    tick: played.start,
+    barNumber: played.barNumber,
+    sectionText: played.masterBar.section?.text || undefined,
   }));
 }
 
@@ -169,21 +171,31 @@ export function trackNamesChords(track: model.Track): boolean {
   return false;
 }
 
-/** Flattens one track's notation into a flat, time-sorted array of NoteEvents. */
-export function extractNotes(track: model.Track): NoteEvent[] {
+/**
+ * Flattens one track's notation into a flat, time-sorted array of NoteEvents,
+ * one pass of the timeline at a time — so a bar inside a repeat is laid out
+ * as many times as it is played, each at its own playback tick. Without a
+ * timeline the written bars are taken once through.
+ */
+export function extractNotes(track: model.Track, timeline: PlayedBar[] = linearTimeline(track.score)): NoteEvent[] {
   const events: NoteEvent[] = [];
   const eventByNote = new Map<model.Note, NoteEvent>();
+  /** Which pass through the timeline each event was laid out in. */
+  const passOf = new Map<NoteEvent, number>();
   const staff = track.staves[0];
   if (!staff) return events;
   const stringCount = staff.tuning.length;
 
-  for (const bar of staff.bars) {
-    const voice = bar.voices[0];
-    if (!voice) continue;
+  timeline.forEach((played, pass) => {
+    const bar = staff.bars[played.masterBar.index];
+    const voice = bar?.voices[0];
+    if (!voice) return;
+    // Where this pass sits relative to the bar as written.
+    const offset = played.start - played.masterBar.start;
 
     voice.beats.forEach((beat, beatIndex) => {
       if (beat.isRest || beat.notes.length === 0) return;
-      const startTick = beat.absolutePlaybackStart;
+      const startTick = beat.absolutePlaybackStart + offset;
       const endTick = startTick + beat.playbackDuration;
       const isChord = beat.notes.length > 1;
       const chordName = chordNameFor(beat);
@@ -194,12 +206,19 @@ export function extractNotes(track: model.Track): NoteEvent[] {
         // extended bar").
         if (note.isTieDestination && note.tieOrigin) {
           const originEvent = eventByNote.get(note.tieOrigin);
-          if (originEvent) {
+          // Only extend a note laid out in this pass or the one just before.
+          // Second time round a repeat, the origin the map remembers can be
+          // from a pass that isn't adjacent (the tie was written into the
+          // repeat from outside it) — stretching that back across the whole
+          // repeat is wrong, so there the tied note stands on its own.
+          const originPass = originEvent ? passOf.get(originEvent) : undefined;
+          if (originEvent && originPass !== undefined && pass - originPass <= 1) {
             if (originEvent.tieBarStartTick === undefined) originEvent.tieBarStartTick = originEvent.endTick;
             originEvent.endTick = endTick;
             // Register this note too, so a longer tie chain (A -> B -> C)
             // keeps resolving back to A's event when C is processed.
             eventByNote.set(note, originEvent);
+            passOf.set(originEvent, pass);
             continue;
           }
         }
@@ -239,9 +258,10 @@ export function extractNotes(track: model.Track): NoteEvent[] {
         };
         events.push(event);
         eventByNote.set(note, event);
+        passOf.set(event, pass);
       }
     });
-  }
+  });
 
   return events.sort((a, b) => a.startTick - b.startTick);
 }

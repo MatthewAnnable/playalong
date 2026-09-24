@@ -5,6 +5,7 @@ import { extractBarMarkers, extractNotes, trackNamesChords, type BarMarker, type
 import { applyFingeringHeuristic } from './fingering';
 import { applyOverrides, loadOverrides, overrideKey, setOverride } from './overrides';
 import { slugify } from './slug';
+import { buildTimeline, playedIndexAtTick, type PlayedBar } from './timeline';
 import * as clock from './clock';
 
 export interface EngineState {
@@ -40,6 +41,11 @@ let mainObjectUrl: string | null = null;
 let noGuitarObjectUrl: string | null = null;
 let positionLoopId = 0;
 let score: model.Score | null = null;
+/**
+ * The bars in the order they are played, repeats unrolled. Player ticks count
+ * along this, not along the written bars — see timeline.ts.
+ */
+let timeline: PlayedBar[] = [];
 let ticksPerQuarter = 960;
 let mediaOutput: synth.IExternalMediaSynthOutput | null = null;
 let horizontalScore = false;
@@ -85,6 +91,20 @@ export function onStateChange(listener: (state: Readonly<EngineState>) => void):
 }
 
 const container = document.querySelector<HTMLDivElement>('#alphatab')!;
+
+/**
+ * alphaTab skips a render outright when its container has no width, and never
+ * tries again on its own. A hosted-library song is laid out while the player
+ * is still hidden (it waits for the no-guitar track before revealing it), so
+ * the score view came up empty in both normal and presentation mode. Render
+ * again the moment the container goes from no width to some.
+ */
+let containerWidth = 0;
+new ResizeObserver(() => {
+  const width = container.clientWidth;
+  if (api && containerWidth === 0 && width > 0) api.render();
+  containerWidth = width;
+}).observe(container);
 
 function makeExternalMediaHandler(el: HTMLAudioElement): synth.IExternalMediaHandler {
   return {
@@ -147,27 +167,33 @@ function stopPositionLoop(): void {
 }
 
 function findBarAtTick(tick: number): number {
-  if (!score) return 1;
-  const bars = score.masterBars;
-  for (let i = bars.length - 1; i >= 0; i--) {
-    if (tick >= bars[i].start) return i + 1;
+  if (timeline.length === 0) return 1;
+  return timeline[playedIndexAtTick(timeline, tick)].barNumber;
+}
+
+/**
+ * Where to go for a written bar number. Inside a repeat a bar is played more
+ * than once; `nearTick` asks for the latest pass at or before that tick (so a
+ * loop restarts on the pass it just played), otherwise it is the first pass.
+ */
+function barToTick(barNumber: number, nearTick?: number): number {
+  let first: PlayedBar | undefined;
+  let latest: PlayedBar | undefined;
+  for (const played of timeline) {
+    if (played.barNumber !== barNumber) continue;
+    first ??= played;
+    if (nearTick !== undefined && played.start <= nearTick) latest = played;
   }
-  return 1;
+  return (latest ?? first)?.start ?? 0;
 }
 
-function barToTick(barNumber: number): number {
-  if (!score) return 0;
-  const index = Math.min(Math.max(barNumber - 1, 0), score.masterBars.length - 1);
-  return score.masterBars[index].start;
-}
-
-function tempoAtBar(barNumber: number): number {
+function tempoAtTick(tick: number): number {
   if (!score) return 120;
   let tempo = score.tempo;
-  const lastIndex = Math.min(Math.max(barNumber - 1, 0), score.masterBars.length - 1);
-  for (let i = 0; i <= lastIndex; i++) {
-    for (const automation of score.masterBars[i].tempoAutomations) {
-      if (automation.type === model.AutomationType.Tempo) tempo = automation.value;
+  const lastIndex = playedIndexAtTick(timeline, tick);
+  for (let i = 0; i <= lastIndex && i < timeline.length; i++) {
+    for (const change of timeline[i].tempoChanges) {
+      if (change.tick <= tick) tempo = change.tempo;
     }
   }
   return tempo;
@@ -187,7 +213,7 @@ function updateFromPlayback(): void {
   state.currentTimeSec = mainAudio.currentTime;
   if (Number.isFinite(mainAudio.duration)) state.durationSec = mainAudio.duration;
   state.currentBar = findBarAtTick(tick);
-  const ticksPerSecond = (tempoAtBar(state.currentBar) / 60) * ticksPerQuarter;
+  const ticksPerSecond = (tempoAtTick(tick) / 60) * ticksPerQuarter;
   clock.recordSample(mainAudio.currentTime, tick, ticksPerSecond);
   // alphaTab's own looping (api.isLooping) just snaps the audio back with no
   // run-up — see restartLoopWithCountIn — so looping is driven from here
@@ -217,10 +243,11 @@ export function getPositionSnapshot(): {
   isPlaying: boolean;
   audioSeconds: number;
 } {
+  const tick = api?.player?.tickPosition ?? 0;
   return {
     audioSeconds: mainAudio?.currentTime ?? 0,
-    tick: api?.player?.tickPosition ?? 0,
-    ticksPerSecond: (tempoAtBar(state.currentBar) / 60) * ticksPerQuarter,
+    tick,
+    ticksPerSecond: (tempoAtTick(tick) / 60) * ticksPerQuarter,
     playbackRate: mainAudio?.playbackRate ?? 1,
     isPlaying: state.isPlaying,
   };
@@ -288,7 +315,7 @@ function applyGuitarVolumes(guitarOn: boolean, immediate: boolean): void {
 
 function loadNotesForTrack(loadedScore: model.Score, index: number): void {
   const track = loadedScore.tracks[index];
-  const events = extractNotes(track);
+  const events = extractNotes(track, timeline);
   applyFingeringHeuristic(events);
   applyOverrides(events, loadOverrides(getSongSlug()));
   state.hasChordNames = trackNamesChords(track);
@@ -317,7 +344,8 @@ function populateTrackSelect(loadedScore: model.Score): void {
   state.trackNames = loadedScore.tracks.map((track, index) => track.name || `Track ${index + 1}`);
   state.trackIndex = 0;
   ticksPerQuarter = computeTicksPerQuarter(loadedScore);
-  state.barMarkers = extractBarMarkers(loadedScore);
+  timeline = buildTimeline(loadedScore);
+  state.barMarkers = extractBarMarkers(timeline);
   loadNotesForTrack(loadedScore, 0);
   notify();
 }
@@ -429,7 +457,7 @@ export function getScoreMeta(): { title: string; artist: string } {
 }
 
 export function getCurrentTempo(): number {
-  return tempoAtBar(state.currentBar);
+  return tempoAtTick(api?.player?.tickPosition ?? 0);
 }
 
 /** Height the transport dock and the stage's own padding take out of the window. */
@@ -544,13 +572,13 @@ export function isHorizontalScore(): boolean {
  * a cancel) started before this one finished, so the caller knows not to act
  * on a count-in that is no longer current.
  */
-async function runCountIn(bar: number): Promise<boolean> {
-  const masterBar = score?.masterBars[bar - 1];
+async function runCountIn(tick: number): Promise<boolean> {
+  const masterBar = timeline[playedIndexAtTick(timeline, tick)]?.masterBar;
   if (!masterBar) return true;
   const token = ++countInToken;
   state.countingIn = true;
   notify();
-  await playCountIn(masterBar.timeSignatureNumerator, tempoAtBar(bar));
+  await playCountIn(masterBar.timeSignatureNumerator, tempoAtTick(tick));
   if (token !== countInToken) return false;
   state.countingIn = false;
   notify();
@@ -576,8 +604,7 @@ export async function togglePlay(): Promise<void> {
     return;
   }
 
-  const bar = findBarAtTick(api.player?.tickPosition ?? 0);
-  if (!(await runCountIn(bar))) return;
+  if (!(await runCountIn(api.player?.tickPosition ?? 0))) return;
   api.playPause();
 }
 
@@ -592,21 +619,36 @@ export async function togglePlay(): Promise<void> {
 async function restartLoopWithCountIn(): Promise<void> {
   if (!api) return;
   api.pause();
-  if (!(await runCountIn(state.loopStartBar))) return;
-  seekToBar(state.loopStartBar);
+  // Back to the pass of the start bar that was just played — inside a
+  // repeat, the first pass through it could be a long way back.
+  const startTick = barToTick(state.loopStartBar, api.player?.tickPosition ?? 0);
+  if (!(await runCountIn(startTick))) return;
+  seekToTick(startTick);
   api.play();
 }
 
 export function seekToBar(bar: number): void {
   if (!api || !score) return;
   const clamped = Math.min(Math.max(bar, 1), score.masterBars.length);
-  api.tickPosition = barToTick(clamped);
+  seekToTick(barToTick(clamped));
+}
+
+function seekToTick(tick: number): void {
+  if (!api) return;
+  api.tickPosition = tick;
   forceCursorToCurrentTick();
   updateFromPlayback();
 }
 
+/**
+ * Steps through bars as they are played, so stepping forward from the end of
+ * a repeated section goes round the repeat rather than skipping past it.
+ */
 export function nudgeBar(delta: number): void {
-  seekToBar(state.currentBar + delta);
+  if (!api || timeline.length === 0) return;
+  const index = playedIndexAtTick(timeline, api.player?.tickPosition ?? 0);
+  const target = Math.min(Math.max(index + delta, 0), timeline.length - 1);
+  seekToTick(timeline[target].start);
 }
 
 /**

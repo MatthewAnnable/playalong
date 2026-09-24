@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { importer } from '@coderline/alphatab';
 import { extractNotes } from './notes';
 import { applyFingeringHeuristic } from './fingering';
+import { buildTimeline } from './timeline';
 
 const FREEDOM_PATH = resolve(__dirname, '../../test-songs/freedom/song.gp');
 
@@ -95,5 +96,25 @@ describe('applyFingeringHeuristic', () => {
     const score = loadFreedom();
     const events = extractNotes(score.tracks[0]);
     expect(events.some((e) => e.fingerSource === 'gp')).toBe(false);
+  });
+});
+
+describe('extractNotes with repeats', () => {
+  // R U Mine is built from repeated riffs: 51 written bars, 81 played.
+  const R_U_MINE_PATH = resolve(__dirname, '../../songs/r-u-mine/song.gp');
+
+  it('lays out a repeated bar once per pass, at the tick alphaTab plays it', () => {
+    const score = importer.ScoreLoader.loadScoreFromBytes(new Uint8Array(readFileSync(R_U_MINE_PATH)));
+    const timeline = buildTimeline(score);
+    expect(timeline.length).toBeGreaterThan(score.masterBars.length);
+
+    const events = extractNotes(score.tracks[0], timeline);
+    const passesOfBar3 = timeline.filter((played) => played.barNumber === 3).map((played) => played.start);
+    const firstBeatOfBar3 = events.filter((e) => e.bar === 3 && e.beatIndex === 0).map((e) => e.startTick);
+    expect(new Set(firstBeatOfBar3)).toEqual(new Set(passesOfBar3));
+    expect(passesOfBar3.length).toBe(4);
+
+    // The last note is near the end of the unrolled song, not the written one.
+    expect(events.at(-1)!.startTick).toBeGreaterThan(score.masterBars.at(-1)!.start);
   });
 });
