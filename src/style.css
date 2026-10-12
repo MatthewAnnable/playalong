@@ -385,6 +385,7 @@
   font-size: var(--ma-size-fine);
   color: var(--stage-text-muted, #A8A29A);
   display: flex;
+  align-items: center;
   gap: 16px;
 }
 
@@ -409,6 +410,12 @@
   justify-content: flex-end;
 }
 
+/* The flex layout above outranks the hidden attribute, so the score view in
+   presentation had a whole hidden board's height of page under it. */
+#app.presentation .highway-surface[hidden] {
+  display: none;
+}
+
 #app.presentation #highway-canvas {
   height: calc(var(--board-fraction, 0.5) * 100vh);
   min-height: 0;
@@ -425,23 +432,127 @@
   height: 64px;
 }
 
-/* The video of the song being played, filling the top half above the song
-   line in presentation mode (see video.ts). Cropped to fit rather than
-   letterboxed; the manifest's videoFocusY picks which band of the frame is
-   kept, so the hands stay in shot on a wide screen. */
+/* The video of the song being played (see video.ts). In the normal view it
+   sits above the board; in presentation it fills the top half, above the
+   board or the scrolling score. Cropped to fit rather than letterboxed; the
+   manifest's videoFocusY picks which band of the frame is kept, so the hands
+   stay in shot on a wide screen. */
 .song-video {
+  display: block;
+  width: 100%;
+  /* The video and the board share what's left of the window between the
+     top rail and the transport (330px of chrome), so both stay on screen. */
+  height: calc((100vh - 330px) * 0.42);
+  min-height: 150px;
+  object-fit: cover;
+  background: #000;
+  border-radius: var(--ma-radius-card);
+  margin-bottom: 12px;
+}
+
+.song-video[hidden] {
   display: none;
 }
 
-#app.presentation:not(.obs) .song-video:not([hidden]) {
-  display: block;
-  position: absolute;
+/* With the video above it, the windowed board gives up some height so the
+   two still fit on one screen. */
+#app.has-video:not(.presentation):has(#highway:not([hidden])) #highway-canvas {
+  height: calc((100vh - 330px) * 0.58);
+  min-height: 220px;
+}
+
+#app.presentation .song-video {
+  position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
+  z-index: 1;
+  margin: 0;
+  min-height: 0;
+  border-radius: 0;
   height: calc((1 - var(--board-fraction, 0.5)) * 100vh - 64px);
-  object-fit: cover;
-  background: #000;
+}
+
+/* Over the score there's no song line to leave room for. */
+#app.presentation:has(#highway[hidden]) .song-video {
+  height: calc((1 - var(--board-fraction, 0.5)) * 100vh);
+}
+
+/* Full screen: the one button a student who has never seen the app will
+   find and press. It sits on the stage itself, at the right of the dark bar
+   just above the board, labelled in words as well as the usual corners icon.
+   Once in, the way out is in the transport dock, which fades while playing. */
+.btn-fullscreen,
+.btn-exit-fullscreen {
+  font-family: var(--ma-font-ui);
+  font-weight: 700;
+  font-size: 16px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  min-height: 44px;
+  padding: 0 20px 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--ma-radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.btn-fullscreen {
+  border: none;
+  background: var(--ma-amber);
+  color: #2E2A28;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.btn-fullscreen:hover {
+  filter: brightness(1.06);
+}
+
+.btn-exit-fullscreen {
+  display: none;
+  border: 1.5px solid rgba(251, 248, 243, 0.55);
+  background: transparent;
+  color: #FBF8F3;
+}
+
+#app.presentation:not(.obs) .btn-exit-fullscreen {
+  display: inline-flex;
+}
+
+/* Where the presentation dock is short of room, the way out is just the
+   corners icon. */
+@media (max-width: 1280px) {
+  #app.presentation .btn-exit-fullscreen {
+    padding: 0 12px;
+  }
+
+  #app.presentation .btn-exit-fullscreen span {
+    display: none;
+  }
+}
+
+#app.presentation .btn-fullscreen {
+  display: none;
+}
+
+.btn-fullscreen:focus-visible,
+.btn-exit-fullscreen:focus-visible {
+  outline: 3px solid var(--ma-amber);
+  outline-offset: 2px;
+}
+
+.btn-fullscreen-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Transport dock */
@@ -888,6 +999,25 @@
 #app.presentation .alphatab-surface {
   background: var(--ma-ink-ground);
   min-height: 100vh;
+}
+
+/* With a video in the top half, the scrolling score takes the bottom half,
+   the same share as the board, and the dock rides above it. */
+#app.presentation.has-video .alphatab-surface.is-horizontal {
+  margin-top: calc((1 - var(--board-fraction, 0.5)) * 100vh);
+  height: calc(var(--board-fraction, 0.5) * 100vh);
+  min-height: 0;
+  padding: 2vh 0;
+}
+
+/* Keeps that top margin inside the player rather than collapsing through it
+   and pushing the whole page down by half a screen. */
+#app.presentation.has-video .player {
+  display: flow-root;
+}
+
+#app.presentation.has-video:has(#highway[hidden]) .transport-dock {
+  bottom: calc(var(--board-fraction, 0.5) * 100vh + 16px);
 }
 
 /* "Screen — horizontal": one endless line of score that alphaTab scrolls

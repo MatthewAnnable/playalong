@@ -42,7 +42,7 @@ describe('buildPracticeLink', () => {
     loopStartBar: 1,
     loopEndBar: 106,
     speed: 100,
-    view: 'score' as const,
+    view: 'highway' as 'highway' | 'score',
     guitarOn: true,
     hasNoGuitarTrack: false,
   };
@@ -53,11 +53,11 @@ describe('buildPracticeLink', () => {
 
   it('round-trips a loop, speed and view through readLinkParams', () => {
     const link = buildPracticeLink(
-      { ...base, trackIndex: 1, loopEnabled: true, loopStartBar: 17, loopEndBar: 24, speed: 70, view: 'highway' },
+      { ...base, trackIndex: 1, loopEnabled: true, loopStartBar: 17, loopEndBar: 24, speed: 70, view: 'score' },
       BASE,
     );
     const params = readLinkParams(new URL(link).search);
-    expect(params).toMatchObject({ song: 'freedom', track: 1, from: 17, to: 24, speed: 0.7, view: 'highway' });
+    expect(params).toMatchObject({ song: 'freedom', track: 1, from: 17, to: 24, speed: 0.7, view: 'score' });
   });
 
   it('only records guitar=off when a no-guitar track exists', () => {

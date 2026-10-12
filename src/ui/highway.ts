@@ -144,6 +144,10 @@ export function initHighway(): void {
 
   window.addEventListener('resize', resizeStage);
 
+  // The highway is what a song opens on; a practice link can still ask for
+  // the score (view=score).
+  setHighwayView(true);
+
   registerAction('viewHighway', () => setHighwayView(true));
   registerAction('viewScore', () => setHighwayView(false));
 

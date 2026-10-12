@@ -4,18 +4,25 @@ A browser play-along for guitar lessons. Open a Guitar Pro file, and it plays
 the real recording in sync with the tab, on screen or on an iPad.
 
 Drag a `.gp` file onto the page and it plays, in sync, with a score view and
-a Yousician-style highway view.
+a Yousician-style highway view. A song opens on the highway; a practice link
+can ask for the score instead (`view=score`).
 
-## Presentation mode (for teaching)
+## Full screen and presentation mode
 
-Press **Presentation** (or `P`) and the chrome goes away, leaving the stage
-full screen with a slim transport that fades out until you move or press
-something.
+The big amber **Full screen** button on the stage, just above the board, is
+the one a student will find without being told. It goes into presentation
+mode and takes the browser full screen too, so the address bar and tabs go.
+**Exit full screen** in the transport (or `Escape`) comes back.
+
+**Presentation** in the top rail (or `P`) is the same mode without taking the
+browser full screen, which suits sharing a window on Zoom. Either way the
+chrome goes away, leaving the stage with a slim transport that fades out until
+you move or press something.
 
 In the score view, presentation mode lays the music out the way Guitar Pro's
 "Screen — horizontal" does: one long line that scrolls itself past a fixed
 reading point, drawn large enough to read across a room. Nothing to scroll by
-hand mid-lesson. In the highway view it simply fills the screen.
+hand mid-lesson. In the highway view the board takes the bottom half.
 
 Press `Escape` to come back.
 
@@ -55,8 +62,10 @@ how much of the screen the board takes.
 
 ## A video of the song being played
 
-A library song can carry a silent video of you playing it, shown in the top
-half of presentation mode above the board. It follows the recording exactly:
+A library song can carry a silent video of you playing it. In the normal view
+it sits above the board; in presentation it fills the top half, above the
+board or above the scrolling score, which then takes the bottom half. (OBS
+mode leaves it out: the live camera is there.) It follows the recording exactly:
 play, pause, scrubbing, loops and slower speeds all carry the video along,
 so at 70% the student sees your hands at 70% too.
 

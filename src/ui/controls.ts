@@ -35,6 +35,8 @@ const guitarToggleRow = document.querySelector<HTMLLabelElement>('#guitar-toggle
 const guitarToggle = document.querySelector<HTMLInputElement>('#guitar-toggle')!;
 const trackSelect = document.querySelector<HTMLSelectElement>('#track-select')!;
 const presentationButton = document.querySelector<HTMLButtonElement>('#presentation-button')!;
+const fullscreenButton = document.querySelector<HTMLButtonElement>('#fullscreen-button')!;
+const exitFullscreenButton = document.querySelector<HTMLButtonElement>('#exit-fullscreen-button')!;
 const appEl = document.querySelector<HTMLElement>('#app')!;
 
 let currentState: Readonly<EngineState>;
@@ -59,6 +61,35 @@ function setProgress(ratio: number): void {
   if (value === lastProgress) return;
   lastProgress = value;
   scrubberWrap.style.setProperty('--progress', value);
+}
+
+/** Safari before 16.4 only knows the prefixed names. */
+type WebkitDocument = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
+type WebkitElement = HTMLElement & { webkitRequestFullscreen?: () => void };
+
+function browserFullscreenElement(): Element | null {
+  const doc = document as WebkitDocument;
+  return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+}
+
+async function requestBrowserFullscreen(): Promise<void> {
+  const root = document.documentElement as WebkitElement;
+  try {
+    if (root.requestFullscreen) await root.requestFullscreen();
+    else root.webkitRequestFullscreen?.();
+  } catch {
+    // Refused or unsupported: presentation alone still fills the page.
+  }
+}
+
+async function exitBrowserFullscreen(): Promise<void> {
+  const doc = document as WebkitDocument;
+  try {
+    if (doc.exitFullscreen) await doc.exitFullscreen();
+    else doc.webkitExitFullscreen?.();
+  } catch {
+    // Already out.
+  }
 }
 
 function formatTime(seconds: number): string {
@@ -280,9 +311,27 @@ export function initControls(): void {
     setPresentationMode(on);
     if (on) showDock();
     else appEl.classList.remove('chrome-hidden');
+    // Leaving presentation by any route (Escape, the top-rail button) leaves
+    // the browser's full screen too.
+    if (!on && browserFullscreenElement()) void exitBrowserFullscreen();
   }
 
   presentationButton.addEventListener('click', () => togglePresentation());
+
+  // Full screen is presentation plus the browser's own full screen, so the
+  // address bar and tabs go too — what a student expects the button to do.
+  // Where the browser won't (an iPhone, say), presentation still fills the page.
+  fullscreenButton.addEventListener('click', () => {
+    togglePresentation(true);
+    void requestBrowserFullscreen();
+  });
+  exitFullscreenButton.addEventListener('click', () => togglePresentation(false));
+  // The browser's own way out (Escape, a swipe) ends presentation with it.
+  for (const event of ['fullscreenchange', 'webkitfullscreenchange']) {
+    document.addEventListener(event, () => {
+      if (!browserFullscreenElement() && isPresentation() && !appEl.classList.contains('obs')) togglePresentation(false);
+    });
+  }
   // Any sign of life brings the dock back: pressing a faded control has to
   // count, or the press that wakes the dock is the press that gets swallowed.
   // A moved mouse only counts once it has really moved (DOCK_WAKE_DISTANCE_PX).

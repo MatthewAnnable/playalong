@@ -63,7 +63,8 @@ export function buildPracticeLink(state: PracticeLinkState, base: string = windo
     params.set('to', String(state.loopEndBar));
   }
   if (state.speed !== 100) params.set('speed', (state.speed / 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, ''));
-  if (state.view === 'highway') params.set('view', 'highway');
+  // The highway is the default view, so only the score needs saying.
+  if (state.view === 'score') params.set('view', 'score');
   if (state.hasNoGuitarTrack && !state.guitarOn) params.set('guitar', 'off');
 
   return url.toString();

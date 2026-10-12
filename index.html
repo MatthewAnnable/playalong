@@ -80,10 +80,10 @@
       </section>
 
       <div id="player" class="player" hidden>
+        <video id="song-video" class="song-video" muted playsinline preload="auto" hidden></video>
         <div id="alphatab" class="alphatab-surface"></div>
 
         <div id="highway" class="highway-surface" hidden>
-          <video id="song-video" class="song-video" muted playsinline preload="auto" hidden></video>
           <div class="highway-header">
             <div>
               <span class="highway-title" id="highway-song-title"></span>
@@ -93,6 +93,12 @@
               <span id="highway-bar-info">Bar 1 / 1</span>
               <span id="highway-tempo"></span>
               <span id="highway-track-name"></span>
+              <button id="fullscreen-button" class="btn-fullscreen" type="button">
+                <svg class="btn-fullscreen-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+                </svg>
+                <span>Full screen</span>
+              </button>
             </div>
           </div>
           <canvas id="highway-canvas"></canvas>
@@ -133,6 +139,13 @@
             /></span>
             <button id="loop-clear-button" class="loop-chip-clear" type="button" aria-label="Clear loop">×</button>
           </div>
+
+          <button id="exit-fullscreen-button" class="btn-exit-fullscreen" type="button" aria-label="Exit full screen">
+            <svg class="btn-fullscreen-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" />
+            </svg>
+            <span>Exit full screen</span>
+          </button>
         </div>
       </div>
     </main>

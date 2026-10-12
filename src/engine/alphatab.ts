@@ -458,6 +458,7 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
   settings.display.staveProfile = state.tabOnly ? StaveProfile.Tab : StaveProfile.ScoreTab;
 
   api = new AlphaTabApi(container, settings);
+  api.postRenderFinished.on(fitScoreToStrip);
   mainAudio = new Audio();
   mainAudio.preload = 'auto';
   setPreservesPitch(mainAudio, true);
@@ -532,12 +533,83 @@ export function getCurrentTempo(): number {
 
 /** Height the transport dock and the stage's own padding take out of the window. */
 const HORIZONTAL_CHROME_HEIGHT = 210;
-const HORIZONTAL_SYSTEM_HEIGHT = 400;
+/** A first guess at one line of score and tab, at scale 1, until a line has been drawn and measured. */
+const HORIZONTAL_SYSTEM_HEIGHT_GUESS = 400;
 const HORIZONTAL_SCALE_MAX = 1.7;
+/** Small enough to keep the tab on a short window; below this it would be unreadable anyway. */
+const HORIZONTAL_SCALE_MIN = 0.5;
+/** Aim a little short of the strip's full height, so a fit that's off by the tolerance still clears it. */
+const HORIZONTAL_FIT_TARGET = 0.97;
+/** A fit this close is left alone, so a resize doesn't redraw for nothing. */
+const HORIZONTAL_FIT_TOLERANCE = 0.03;
 
+/** Share of the screen height the scrolling score gets: all of it, or the bottom part when a video takes the top. */
+let scoreStripShare = 1;
+/** The strip's own top and bottom padding when it shares the screen (2vh each, see style.css). */
+const HORIZONTAL_STRIP_PADDING = 0.04;
+/** How tall one line of this song's score and tab is at scale 1, measured off the last drawing. */
+let measuredSystemHeight = 0;
+
+/**
+ * The height the line has to fit into: the strip as laid out, less its own
+ * padding (which already keeps it clear of the dock). Before the strip has
+ * been laid out it's worked out from the window instead.
+ */
+function horizontalAvailableHeight(): number {
+  if (horizontalScore && container.classList.contains('is-horizontal') && container.clientHeight > 0) {
+    const style = getComputedStyle(container);
+    return container.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  }
+  return scoreStripShare < 1
+    ? window.innerHeight * (scoreStripShare - HORIZONTAL_STRIP_PADDING)
+    : window.innerHeight - HORIZONTAL_CHROME_HEIGHT;
+}
+
+/** The scale that makes the whole line — notation and tab — fill the strip's height and no more. */
 function horizontalScale(): number {
-  const available = window.innerHeight - HORIZONTAL_CHROME_HEIGHT;
-  return Math.min(Math.max(available / HORIZONTAL_SYSTEM_HEIGHT, 1), HORIZONTAL_SCALE_MAX);
+  const natural = measuredSystemHeight || HORIZONTAL_SYSTEM_HEIGHT_GUESS;
+  const scale = (horizontalAvailableHeight() * HORIZONTAL_FIT_TARGET) / natural;
+  return Math.min(Math.max(scale, HORIZONTAL_SCALE_MIN), HORIZONTAL_SCALE_MAX);
+}
+
+/** How far down the drawn line reaches, from the top of the drawing, in screen pixels. */
+function drawnSystemHeight(): number {
+  const surface = container.querySelector<HTMLElement>('.at-surface');
+  if (!surface) return 0;
+  const top = surface.getBoundingClientRect().top;
+  let bottom = 0;
+  for (const piece of surface.querySelectorAll<HTMLElement>(':scope > div')) {
+    const r = piece.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) bottom = Math.max(bottom, r.bottom - top);
+  }
+  return bottom;
+}
+
+let refitsInARow = 0;
+
+/**
+ * The first guess at a line's height is only a guess: a song with chord
+ * names, a tempo mark or effects above the staff is taller, and the tab —
+ * the part they're actually reading — was what fell off the bottom. So once
+ * the line is drawn it's measured, and if it doesn't fill the strip (or
+ * overflows it) the scale is corrected and it's drawn once more. A resize
+ * then uses the measurement straight away.
+ */
+function fitScoreToStrip(): void {
+  if (!api || !horizontalScore || !scoreViewVisible) return;
+  const drawn = drawnSystemHeight();
+  const scale = api.settings.display.scale;
+  if (drawn <= 0 || scale <= 0) return;
+  measuredSystemHeight = drawn / scale;
+  const wanted = horizontalScale();
+  if (Math.abs(wanted - scale) / scale <= HORIZONTAL_FIT_TOLERANCE || refitsInARow >= 2) {
+    refitsInARow = 0;
+    return;
+  }
+  refitsInARow++;
+  api.settings.display.scale = wanted;
+  api.updateSettings();
+  api.render();
 }
 /** Where the played bar sits across the stage, left to right. */
 const HORIZONTAL_READING_POINT = 0.25;
@@ -565,6 +637,38 @@ export function setPresentationMode(on: boolean): void {
   applyScoreLayout(wantsHorizontal());
   api.updateSettings();
   api.render();
+  if (!on && scoreViewVisible) ensureScoreDrawn();
+}
+
+/**
+ * Leaving presentation swaps the one-line score back to the page while the
+ * stage is still changing size around it, and at least once (Safari) that
+ * left the page laid out but never drawn — blank until a switch to the
+ * highway and back drew it again. So once the page says it's finished, look:
+ * if the part of the score on screen is still empty, draw it again.
+ */
+function ensureScoreDrawn(attempt = 0): void {
+  if (!api || attempt >= 3) return;
+  const off = api.postRenderFinished.on(() => {
+    off();
+    window.setTimeout(() => {
+      if (!api || !scoreViewVisible || horizontalScore || presentationOn) return;
+      if (!visibleScoreIsBlank()) return;
+      api.render();
+      ensureScoreDrawn(attempt + 1);
+    }, 300);
+  });
+}
+
+/** True when the score is on screen but none of its drawn pieces are. */
+function visibleScoreIsBlank(): boolean {
+  const box = container.getBoundingClientRect();
+  if (container.hidden || box.width === 0 || box.bottom < 0 || box.top > window.innerHeight) return false;
+  const pieces = [...container.querySelectorAll<HTMLElement>('.at-surface > div')].filter((piece) => {
+    const r = piece.getBoundingClientRect();
+    return r.width > 0 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
+  });
+  return !pieces.some((piece) => piece.querySelector('svg, canvas, img'));
 }
 
 function wantsHorizontal(): boolean {
@@ -595,12 +699,16 @@ export function setScoreViewVisible(visible: boolean): void {
 function applyScoreLayout(horizontal: boolean): void {
   if (!api) return;
   horizontalScore = horizontal;
+  // The strip takes its shape first, so the scale below is fitted to the
+  // height it really has.
+  container.classList.toggle('is-horizontal', horizontal);
   const display = api.settings.display;
   const player = api.settings.player;
   display.layoutMode = horizontal ? LayoutMode.Horizontal : LayoutMode.Page;
-  // One line of music has the whole screen to itself, so it can be drawn much
-  // larger — big enough to read across a room on a Zoom share, but scaled back
-  // on a short window so the tab staff doesn't fall off the bottom.
+  // One line of music has the whole strip to itself, so it's drawn as large
+  // as fits its height — big enough to read across a room on a Zoom share,
+  // and smaller on a short window so the tab staff never falls off the bottom
+  // (see fitScoreToStrip).
   display.scale = horizontal ? horizontalScale() : 1;
   // Smooth keeps the line moving with the music rather than jumping a bar at a
   // time. The reading point sits at HORIZONTAL_READING_POINT across the stage —
@@ -613,7 +721,6 @@ function applyScoreLayout(horizontal: boolean): void {
   // horizontal strip is scrolled by script inside a clipped container, which
   // that check cannot see, so the line past the first screen came out blank.
   api.settings.core.enableLazyLoading = !horizontal;
-  container.classList.toggle('is-horizontal', horizontal);
 }
 
 /**
@@ -630,6 +737,19 @@ window.addEventListener('resize', () => {
   api.updateSettings();
   api.render();
 });
+
+/**
+ * Gives the scrolling score only the bottom `share` of the screen, so a video
+ * of the song can fill the top. The line is drawn smaller to fit.
+ */
+export function setScoreStripShare(share: number): void {
+  if (scoreStripShare === share) return;
+  scoreStripShare = share;
+  if (!api || !horizontalScore) return;
+  api.settings.display.scale = horizontalScale();
+  api.updateSettings();
+  api.render();
+}
 
 export function isHorizontalScore(): boolean {
   return horizontalScore;

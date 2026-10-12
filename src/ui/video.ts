@@ -1,8 +1,9 @@
-import { getPositionSnapshot } from '../engine/alphatab';
+import { getPositionSnapshot, setScoreStripShare } from '../engine/alphatab';
 
 /**
- * A silent video of the song being played, filling the top half of the
- * screen above the board in presentation mode. It has no clock of its own:
+ * A silent video of the song being played: above the board in the normal
+ * highway view, and filling the top half in presentation, over the board or
+ * the scrolling score. It has no clock of its own:
  * every frame it is put where the recording is, at the recording's speed,
  * so play, pause, scrubbing, loops and slow practice all carry it along.
  */
@@ -21,13 +22,24 @@ const MAX_NUDGE = 0.08;
 let offsetSec = 0;
 let frameId = 0;
 
+/** OBS has the live camera up there instead, and the normal score view is a page with no room for it. */
 function isShowing(): boolean {
   return (
     !!video.getAttribute('src') &&
-    appEl.classList.contains('presentation') &&
     !appEl.classList.contains('obs') &&
-    !highwaySurface.hidden
+    (appEl.classList.contains('presentation') || !highwaySurface.hidden)
   );
+}
+
+/** The score strip shares the screen with the video in presentation, at the board's share. */
+function boardFraction(): number {
+  const value = Number(getComputedStyle(document.documentElement).getPropertyValue('--board-fraction'));
+  return value > 0 ? value : 0.5;
+}
+
+function setHasVideo(has: boolean): void {
+  appEl.classList.toggle('has-video', has);
+  setScoreStripShare(has ? boardFraction() : 1);
 }
 
 function follow(): void {
@@ -67,6 +79,7 @@ export function setSongVideo(url: string, offsetSeconds = 0, focusY = 50): void 
   offsetSec = offsetSeconds;
   video.style.objectPosition = `50% ${focusY}%`;
   if (video.getAttribute('src') !== url) video.src = url;
+  setHasVideo(true);
   if (!frameId) frameId = requestAnimationFrame(follow);
 }
 
@@ -76,4 +89,5 @@ export function clearSongVideo(): void {
   video.removeAttribute('src');
   video.load();
   video.hidden = true;
+  setHasVideo(false);
 }

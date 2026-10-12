@@ -232,7 +232,7 @@ function applyLinkParams(params: LinkParams): void {
     const to = Math.min(Math.max(params.to ?? totalBars, 1), totalBars);
     setLoop(from, to, true);
   }
-  if (params.view === 'highway') setHighwayView(true);
+  if (params.view) setHighwayView(params.view === 'highway');
   if (params.guitar === 'off') setGuitarOn(false);
   if (params.autoplay) void togglePlay();
 }
