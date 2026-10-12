@@ -40,6 +40,18 @@ function applyTransparentStage(): void {
   document.documentElement.style.setProperty('--stage-header-text-shadow', theme.obs.textShadow);
 }
 
+/**
+ * How much of the screen the highway board takes in presentation and OBS,
+ * from the bottom up — half by default, so the top half is free for the
+ * camera (OBS) or a video of the song being played (presentation).
+ * `?board=0.4` (or anything from 0.25 to 1) changes it.
+ */
+function applyBoardHeight(): void {
+  const raw = Number(new URLSearchParams(location.search).get('board'));
+  const fraction = Number.isFinite(raw) && raw > 0 ? Math.min(Math.max(raw, 0.25), 1) : 0.5;
+  document.documentElement.style.setProperty('--board-fraction', String(fraction));
+}
+
 function initObsMode(): void {
   appEl.classList.add('obs', 'presentation');
   applyTransparentStage();
@@ -166,6 +178,7 @@ function initRemoteMode(): void {
 }
 
 export function initMode(rawMode: string | undefined): AppMode {
+  applyBoardHeight();
   if (rawMode === 'obs') {
     mode = 'obs';
     initObsMode();

@@ -36,8 +36,22 @@ interface Placed {
   /** The full width the note's duration occupies, nick included. */
   pitchW: number;
   centerY: number;
+  laneIndex: number;
   joinNext: Join;
   joinPrev: Join;
+}
+
+/** A lane's place on the tilted board: flat x/y in, screen x/y out — `screen = s * flat + d`. */
+interface LaneTransform {
+  s: number;
+  dx: number;
+  dy: number;
+}
+
+/** Where the ball lands: the first beat of each onset, on its highest string. */
+interface Onset {
+  tick: number;
+  laneIndex: number;
 }
 
 interface Span {
@@ -97,8 +111,13 @@ export class HighwayView {
   private obsMode = false;
   private chordPills = true;
   private hitNoteIds = new Map<number, number>();
+  private onsets: Onset[] = [];
+  /** Perspective constants, refreshed once a frame (see `refreshBoard`). */
+  private board = { top: 0, height: 1, k: 0, norm: 0, vx: 0 };
+  /** Cached winding texture per gauge, so a wound string isn't re-ticked every frame. */
+  private windingCache = new Map<string, CanvasPattern | null>();
   /** Last frame's laid-out pills, so a click can be mapped back to a note. */
-  private lastLayout: { note: NoteEvent; x: number; w: number; centerY: number; h: number }[] = [];
+  private lastLayout: { note: NoteEvent; x: number; w: number; centerY: number; h: number; laneIndex: number }[] = [];
 
   constructor(options: HighwayViewOptions) {
     this.canvas = options.canvas;
@@ -115,6 +134,13 @@ export class HighwayView {
 
   setNotes(notes: NoteEvent[]): void {
     this.notes = notes;
+    this.onsets = [];
+    for (const note of notes) {
+      const laneIndex = note.string - 1;
+      const last = this.onsets[this.onsets.length - 1];
+      if (last && last.tick === note.startTick) last.laneIndex = Math.min(last.laneIndex, laneIndex);
+      else this.onsets.push({ tick: note.startTick, laneIndex });
+    }
   }
 
   setBarMarkers(markers: BarMarker[]): void {
@@ -123,6 +149,7 @@ export class HighwayView {
 
   setTheme(theme: Theme): void {
     this.theme = theme;
+    this.windingCache.clear();
   }
 
   setObsMode(obs: boolean): void {
@@ -140,6 +167,7 @@ export class HighwayView {
     this.canvas.width = Math.round(rect.width * dpr);
     this.canvas.height = Math.round(rect.height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.windingCache.clear();
   }
 
   start(): void {
@@ -178,12 +206,94 @@ export class HighwayView {
     return this.px(this.theme.geometry.headerHeight);
   }
 
+  /** Ground left under the nearest string, so its notes clear the board's bottom edge. */
+  private footHeight(): number {
+    return this.px(this.theme.board?.nearMargin ?? 0);
+  }
+
   private laneHeight(): number {
-    return (this.stageHeight() - this.headerHeight()) / this.laneCount;
+    return (this.stageHeight() - this.headerHeight() - this.footHeight()) / this.laneCount;
   }
 
   private laneCenterY(laneIndex: number): number {
     return this.headerHeight() + laneIndex * this.laneHeight() + this.laneHeight() / 2;
+  }
+
+  // ---- the tilted board ----------------------------------------------
+  //
+  // Everything is laid out flat, exactly as before — six even lanes, notes at
+  // their tick — and then stood on a board that leans away from the viewer,
+  // the way you look down at your own neck: the low E nearest and largest,
+  // the high e furthest and smallest. Each lane is drawn under its own
+  // uniform scale, so a pill on the far string is a smaller copy of a near
+  // one, never squashed. Lanes are also spaced by that scale, which keeps
+  // every pill sitting in the same share of its lane on every string.
+
+  private refreshBoard(width: number): void {
+    const far = Math.min(Math.max(this.theme.board?.farScale ?? 1, 0.3), 1);
+    const k = 1 / far - 1;
+    this.board = {
+      top: this.headerHeight(),
+      height: Math.max(this.stageHeight() - this.headerHeight() - this.footHeight(), 1),
+      k,
+      norm: k > 1e-6 ? Math.log(1 + k) : 0,
+      vx: width * (this.theme.board?.vanishX ?? 0.5),
+    };
+  }
+
+  /** Local scale at a point `u` down the board (0 = far edge, 1 = near edge). Averages 1 across the board. */
+  private sigma(u: number): number {
+    const { k, norm } = this.board;
+    if (norm === 0) return 1;
+    const uc = Math.min(Math.max(u, 0), 1);
+    return k / (1 + k * (1 - uc)) / norm;
+  }
+
+  /** Screen y for a point `u` down the board, extended straight beyond its edges. */
+  private boardY(u: number): number {
+    const { top, height, k, norm } = this.board;
+    if (norm === 0) return top + u * height;
+    const uc = Math.min(Math.max(u, 0), 1);
+    const g = (norm - Math.log(1 + k * (1 - uc))) / norm;
+    return top + height * (g + (u - uc) * this.sigma(uc));
+  }
+
+  private uFor(flatY: number): number {
+    return (flatY - this.board.top) / this.board.height;
+  }
+
+  /** Flat → screen for an arbitrary point (bar lines, beat lines, the play line). */
+  private project(x: number, flatY: number): { x: number; y: number; s: number } {
+    const u = this.uFor(flatY);
+    const s = this.sigma(u);
+    return { x: this.board.vx + (x - this.board.vx) * s, y: this.boardY(u), s };
+  }
+
+  private laneTransform(laneIndex: number): LaneTransform {
+    const c = this.laneCenterY(laneIndex);
+    const u = this.uFor(c);
+    const s = this.sigma(u);
+    return { s, dx: this.board.vx * (1 - s), dy: this.boardY(u) - c * s };
+  }
+
+  private applyLane(t: LaneTransform, x: number, y: number): { x: number; y: number } {
+    return { x: t.s * x + t.dx, y: t.s * y + t.dy };
+  }
+
+  /** Runs `draw` in a lane's own flat coordinates, scaled and placed on the board. */
+  private withLane(laneIndex: number, draw: () => void): void {
+    const t = this.laneTransform(laneIndex);
+    this.ctx.save();
+    this.ctx.transform(t.s, 0, 0, t.s, t.dx, t.dy);
+    draw();
+    this.ctx.restore();
+  }
+
+  /** The flat x-range that lands on screen anywhere on the board — wider than the canvas when the far edge is shrunk. */
+  private flatXRange(width: number): [number, number] {
+    const s = Math.min(this.sigma(0), 1);
+    const vx = this.board.vx;
+    return [vx - vx / s, vx + (width - vx) / s];
   }
 
   private pillHeight(): number {
@@ -251,124 +361,427 @@ export class HighwayView {
     const { width, height } = this.canvas.getBoundingClientRect();
     const ctx = this.ctx;
     const currentTick = this.getTick();
-    const theme = this.theme;
 
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = theme.stage.background;
+    this.refreshBoard(width);
+    this.drawBoard(width, height);
+    this.drawGrid(currentTick, width);
+    this.drawStrings(width);
+    this.drawNotes(currentTick, width);
+    this.drawPlayLine();
+    this.drawBall(currentTick);
+    this.drawHandLegend(width);
+  }
+
+  // ---- the board ----------------------------------------------------
+
+  /**
+   * A solid ground for the whole stage, OBS included: cream notes over a
+   * live camera feed weren't readable, so the highway brings its own dark
+   * board and the camera shows above it instead of through it.
+   */
+  private drawBoard(width: number, height: number): void {
+    const ctx = this.ctx;
+    const board = this.theme.board;
+    const far = board?.background ?? this.theme.stage.background;
+    const near = board?.backgroundNear ?? far;
+    const ground = ctx.createLinearGradient(0, 0, 0, height);
+    ground.addColorStop(0, far);
+    ground.addColorStop(1, near);
+    ctx.fillStyle = ground;
     ctx.fillRect(0, 0, width, height);
 
-    this.drawLanes(width);
-    this.drawBarMarkers(currentTick, width, height);
-    this.drawNotes(currentTick, width);
-    this.drawPlayLine(height);
+    if (board?.edge) {
+      ctx.save();
+      ctx.strokeStyle = board.edge;
+      ctx.globalAlpha = board.edgeOpacity ?? 0.5;
+      ctx.lineWidth = this.px(2);
+      const y = Math.round(this.board.top) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
-  private strokeStructureLine(x0: number, y0: number, x1: number, y1: number, baseColor: string, baseOpacity: number): void {
+  /** A line across the board at one tick — leaning with the perspective, like a fret seen from above. */
+  private strokeBoardLine(flatX: number, color: string, alpha: number, lineWidth: number): void {
     const ctx = this.ctx;
-    if (this.obsMode) {
-      const obs = this.theme.obs;
-      const w = this.px(obs.lineWidth);
-      ctx.lineWidth = w;
-      ctx.strokeStyle = obs.laneLight;
-      ctx.globalAlpha = obs.laneLightOpacity;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-      ctx.strokeStyle = obs.laneDark;
-      ctx.globalAlpha = obs.laneDarkOpacity;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0 + w);
-      ctx.lineTo(x1, y1 + w);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.strokeStyle = baseColor;
-      ctx.globalAlpha = baseOpacity;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+    const steps = 8;
+    // Down through the margin under the low E to the board's very edge.
+    const span = this.board.height + this.footHeight();
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const point = this.project(flatX, this.board.top + (span * i) / steps);
+      if (i === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
     }
+    ctx.stroke();
+    ctx.restore();
   }
 
-  private drawLanes(width: number): void {
-    const laneH = this.laneHeight();
-    const top = this.headerHeight();
-    for (let i = 0; i <= this.laneCount; i++) {
-      const y = Math.round(top + i * laneH) + 0.5;
-      this.strokeStructureLine(0, y, width, y, this.theme.lane, this.theme.laneOpacity);
-    }
-  }
-
-  private drawPlayLine(height: number): void {
+  /**
+   * Bar lines, plus faint beat lines between them and fainter still on the
+   * off-beats, so a note's place in the bar — on the beat, on the "and" —
+   * can be seen as well as heard.
+   */
+  private drawGrid(currentTick: number, width: number): void {
     const ctx = this.ctx;
     const theme = this.theme;
-    const x = this.playLineX();
+    const board = theme.board;
+    const [minX, maxX] = this.flatXRange(width);
+    const leftEdgeTick = currentTick + (minX - this.playLineX()) / this.pxPerTick;
+    const rightEdgeTick = currentTick + (maxX - this.playLineX()) / this.pxPerTick;
+    const beatColor = board?.beatLine ?? theme.barLine;
+    const beatAlpha = board?.beatLineOpacity ?? 0.22;
+    const offbeatAlpha = board?.offbeatLineOpacity ?? 0;
+
+    for (let m = 0; m < this.barMarkers.length; m++) {
+      const marker = this.barMarkers[m];
+      const barEnd = this.barMarkers[m + 1]?.tick ?? marker.tick + marker.beats * marker.beatTicks;
+      if (barEnd < leftEdgeTick || marker.tick > rightEdgeTick) continue;
+
+      for (let half = 1; half < marker.beats * 2; half++) {
+        const tick = marker.tick + (half * marker.beatTicks) / 2;
+        if (tick >= barEnd) break;
+        const onBeat = half % 2 === 0;
+        if (!onBeat && offbeatAlpha <= 0) continue;
+        this.strokeBoardLine(
+          this.xForTick(tick, currentTick),
+          beatColor,
+          onBeat ? beatAlpha : offbeatAlpha,
+          this.px(onBeat ? 2 : 1.5),
+        );
+      }
+
+      const x = this.xForTick(marker.tick, currentTick);
+      this.strokeBoardLine(x, theme.barLine, theme.barLineOpacity, this.px(2.5));
+
+      // The bar number stands on the board's far edge at the top of its
+      // bar line, with the section name (if one starts here) beside it.
+      const top = this.project(x, this.board.top);
+      const labelY = top.y - this.px(10);
+      ctx.save();
+      ctx.font = `700 ${this.px(30)}px Manrope, sans-serif`;
+      ctx.fillStyle = theme.textMuted;
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'left';
+      const number = String(marker.barNumber);
+      ctx.fillText(number, top.x + this.px(4), labelY);
+      if (marker.sectionText) {
+        const after = top.x + this.px(4) + ctx.measureText(number).width + this.px(12);
+        ctx.font = `700 ${this.px(24)}px Manrope, sans-serif`;
+        ctx.fillStyle = theme.textEyebrow;
+        ctx.fillText(marker.sectionText.toUpperCase(), after, labelY);
+      }
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Six real strings rather than six lanes: thin plain steel for the top
+   * three, thicker bronze-wound for the bottom three, so which string a note
+   * is on can be seen from the string itself. Each one is drawn across the
+   * whole board at its own gauge, shrunk with the perspective.
+   */
+  private drawStrings(width: number): void {
+    const ctx = this.ctx;
+    const spec = this.theme.strings;
+    for (let lane = 0; lane < this.laneCount; lane++) {
+      const t = this.laneTransform(lane);
+      const y = t.s * this.laneCenterY(lane) + t.dy;
+      const gauge = this.px(spec?.gauges[lane] ?? 2) * t.s;
+      const wound = spec?.wound[lane] ?? false;
+      const colors = wound ? spec?.woundColors : spec?.plainColors;
+      if (!colors) {
+        ctx.save();
+        ctx.strokeStyle = this.theme.lane;
+        ctx.globalAlpha = this.theme.laneOpacity;
+        ctx.lineWidth = gauge;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
+
+      // A soft shadow on the board under the string lifts it off the wood.
+      ctx.save();
+      ctx.fillStyle = '#000';
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(0, y - gauge / 2 + gauge * 0.6, width, gauge);
+      ctx.restore();
+
+      const metal = ctx.createLinearGradient(0, y - gauge / 2, 0, y + gauge / 2);
+      metal.addColorStop(0, colors.dark);
+      metal.addColorStop(0.35, colors.light);
+      metal.addColorStop(0.6, colors.mid);
+      metal.addColorStop(1, colors.dark);
+      ctx.fillStyle = metal;
+      ctx.fillRect(0, y - gauge / 2, width, gauge);
+
+      if (wound) {
+        const pattern = this.windingPattern(gauge, colors.dark);
+        if (pattern) {
+          ctx.save();
+          ctx.fillStyle = pattern;
+          ctx.globalAlpha = 0.6;
+          ctx.translate(0, y - gauge / 2);
+          ctx.fillRect(0, 0, width, gauge);
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  /** The slanted ticks of a wound string's outer wrap, drawn once per gauge and tiled. */
+  private windingPattern(gauge: number, ink: string): CanvasPattern | null {
+    const dpr = window.devicePixelRatio || 1;
+    const key = `${Math.round(gauge * 10)}:${ink}`;
+    const cached = this.windingCache.get(key);
+    if (cached !== undefined) return cached;
+    const pitch = Math.max(gauge * 0.55, 2);
+    const tile = document.createElement('canvas');
+    tile.width = Math.max(Math.round(pitch * dpr), 2);
+    tile.height = Math.max(Math.round(gauge * dpr), 2);
+    const tctx = tile.getContext('2d');
+    let pattern: CanvasPattern | null = null;
+    if (tctx) {
+      tctx.strokeStyle = ink;
+      tctx.lineWidth = Math.max(tile.width * 0.32, 1);
+      const lean = tile.height * 0.45;
+      tctx.beginPath();
+      for (let x = -tile.width; x <= tile.width * 2; x += tile.width) {
+        tctx.moveTo(x - lean / 2, tile.height);
+        tctx.lineTo(x + lean / 2, 0);
+      }
+      tctx.stroke();
+      pattern = this.ctx.createPattern(tile, 'repeat-x');
+      pattern?.setTransform(new DOMMatrix().scale(1 / dpr, 1 / dpr));
+    }
+    this.windingCache.set(key, pattern);
+    return pattern;
+  }
+
+  private drawPlayLine(): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const top = this.project(this.playLineX(), this.board.top);
+    const bottom = this.project(this.playLineX(), this.board.top + this.board.height);
+    const mid = this.project(this.playLineX(), this.board.top + this.board.height / 2);
     const w = this.px(theme.playLineWidth);
     const cap = this.px(theme.playLineCapSize);
     const keylineW = this.px(theme.keylineWidth);
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(top.x, top.y);
+      ctx.quadraticCurveTo(2 * mid.x - (top.x + bottom.x) / 2, 2 * mid.y - (top.y + bottom.y) / 2, bottom.x, bottom.y);
+    };
 
     ctx.save();
+    ctx.globalAlpha = theme.board?.playLineOpacity ?? 1;
     ctx.strokeStyle = 'rgba(13,17,11,0.92)';
     ctx.lineWidth = w + keylineW * 2;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
+    path();
     ctx.stroke();
-
     ctx.strokeStyle = theme.playLine;
     ctx.lineWidth = w;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
+    path();
     ctx.stroke();
 
     ctx.fillStyle = theme.playLine;
     ctx.beginPath();
-    ctx.moveTo(x - cap / 2, 0);
-    ctx.lineTo(x + cap / 2, 0);
-    ctx.lineTo(x, cap);
+    ctx.moveTo(top.x - (cap * top.s) / 2, top.y);
+    ctx.lineTo(top.x + (cap * top.s) / 2, top.y);
+    ctx.lineTo(top.x, top.y + cap * top.s);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(x - cap / 2, height);
-    ctx.lineTo(x + cap / 2, height);
-    ctx.lineTo(x, height - cap);
+    ctx.moveTo(bottom.x - (cap * bottom.s) / 2, bottom.y);
+    ctx.lineTo(bottom.x + (cap * bottom.s) / 2, bottom.y);
+    ctx.lineTo(bottom.x, bottom.y - cap * bottom.s);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
   }
 
-  private drawBarMarkers(currentTick: number, width: number, height: number): void {
+  // ---- the ball ----------------------------------------------------
+
+  /**
+   * A ball that hops from each note onto the next, landing as it is played.
+   * The hop's height grows with the gap, and the dotted arcs ahead show the
+   * hops still to come — so how long until the next note can be read off the
+   * board before it arrives, not only heard.
+   */
+  private drawBall(currentTick: number): void {
+    const spec = this.theme.ball;
+    if (!spec || this.onsets.length === 0) return;
     const ctx = this.ctx;
-    const theme = this.theme;
-    const rightEdgeTick = currentTick + (width - this.playLineX()) / this.pxPerTick;
-    const leftEdgeTick = currentTick - this.playLineX() / this.pxPerTick;
-    const barLineY0 = this.headerHeight();
 
-    for (const marker of this.barMarkers) {
-      if (marker.tick < leftEdgeTick || marker.tick > rightEdgeTick) continue;
-      const x = this.xForTick(marker.tick, currentTick);
-      const rx = Math.round(x) + 0.5;
-      this.strokeStructureLine(rx, barLineY0, rx, height, theme.barLine, theme.barLineOpacity);
-
-      ctx.font = `600 ${this.px(17)}px Manrope, sans-serif`;
-      ctx.fillStyle = theme.textMuted;
-      ctx.textBaseline = 'top';
-      ctx.textAlign = 'left';
-      ctx.fillText(String(marker.barNumber), x + this.px(6), barLineY0 + this.px(6));
-
-      if (marker.sectionText) {
-        ctx.save();
-        ctx.font = `600 ${this.px(13)}px Manrope, sans-serif`;
-        ctx.fillStyle = theme.textEyebrow;
-        ctx.fillText(marker.sectionText.toUpperCase(), x + this.px(6), barLineY0 + this.px(24));
-        ctx.restore();
+    // The last onset at or before now — the ball is in flight from it.
+    let lo = 0;
+    let hi = this.onsets.length - 1;
+    let from = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.onsets[mid].tick <= currentTick) {
+        from = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
       }
     }
+
+    const radius = this.px(spec.radius);
+    const leadIn = spec.leadInTicks ?? 1920;
+    // Before the first note the ball drops in from the far edge of the board.
+    const first = this.onsets[0];
+    const hopStart = (index: number): Onset =>
+      index >= 0 ? this.onsets[index] : { tick: first.tick - leadIn, laneIndex: -1 };
+    if (from < 0 && currentTick < first.tick - leadIn) return;
+    if (from === this.onsets.length - 1 && currentTick - this.onsets[from].tick > leadIn) return;
+
+    const landing = (onset: Onset): { x: number; y: number; s: number } => {
+      const x = this.xForTick(onset.tick, currentTick);
+      if (onset.laneIndex < 0) {
+        const edge = this.project(x, this.board.top);
+        return { x: edge.x, y: edge.y - radius * edge.s, s: edge.s };
+      }
+      const t = this.laneTransform(onset.laneIndex);
+      const p = this.applyLane(t, x, this.laneCenterY(onset.laneIndex) - this.pillHeight() / 2 - radius);
+      return { ...p, s: t.s };
+    };
+
+    const hopPoint = (a: { x: number; y: number; s: number }, b: { x: number; y: number; s: number }, p: number) => {
+      const s = a.s + (b.s - a.s) * p;
+      const span = Math.abs(b.x - a.x);
+      const rise = Math.min(Math.max(span * (spec.risePerPx ?? 0.3), this.px(spec.minRise ?? 18)), this.px(spec.maxRise));
+      let y = a.y + (b.y - a.y) * p - 4 * rise * s * p * (1 - p);
+      y = Math.max(y, radius * s);
+      return { x: a.x + (b.x - a.x) * p, y, s };
+    };
+
+    // Dotted trail: the rest of the current hop, then the next few in full.
+    ctx.save();
+    ctx.fillStyle = spec.trail;
+    ctx.globalAlpha = spec.trailOpacity;
+    const spacing = this.px(spec.dotSpacing ?? 16);
+    for (let hop = 0; hop < (spec.hopsAhead ?? 5); hop++) {
+      const aIndex = from + hop;
+      if (aIndex + 1 >= this.onsets.length) break;
+      const a = landing(hopStart(aIndex));
+      const b = landing(this.onsets[aIndex + 1]);
+      if (a.x > this.canvas.getBoundingClientRect().width) break;
+      const p0 = hop === 0 ? this.hopProgress(hopStart(aIndex).tick, this.onsets[aIndex + 1].tick, currentTick) : 0;
+      const steps = Math.max(Math.ceil((Math.abs(b.x - a.x) * 1.3) / spacing), 2);
+      for (let i = Math.ceil(p0 * steps) + 1; i < steps; i++) {
+        const point = hopPoint(a, b, i / steps);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, this.px(spec.dotRadius ?? 3) * point.s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // The ball itself.
+    let ball: { x: number; y: number; s: number };
+    if (from === this.onsets.length - 1) {
+      ball = landing(this.onsets[from]);
+    } else {
+      const startOnset = hopStart(from);
+      const endOnset = this.onsets[from + 1];
+      ball = hopPoint(landing(startOnset), landing(endOnset), this.hopProgress(startOnset.tick, endOnset.tick, currentTick));
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, radius * ball.s, 0, Math.PI * 2);
+    ctx.fillStyle = spec.color;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = this.px(8);
+    ctx.shadowOffsetY = this.px(3);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private hopProgress(fromTick: number, toTick: number, currentTick: number): number {
+    if (toTick <= fromTick) return 1;
+    return Math.min(Math.max((currentTick - fromTick) / (toTick - fromTick), 0), 1);
+  }
+
+  // ---- the hand ----------------------------------------------------
+
+  /**
+   * Which colour is which finger, as a hand: a fretting hand seen palm-on,
+   * thumb to the left, so the fingertips read 1 2 3 4 left to right.
+   */
+  private drawHandLegend(width: number): void {
+    const spec = this.theme.handLegend;
+    if (!spec?.show) return;
+    const ctx = this.ctx;
+    const theme = this.theme;
+    // It stands in the strip above the board and may dip into the board's
+    // far margin, but never down to the high e string.
+    const floor = this.board.top + (this.boardY(this.uFor(this.laneCenterY(0))) - this.board.top) * 0.45;
+    const h = Math.min(floor - this.px(6), this.px(spec.height ?? 80));
+    if (h < 18) return;
+    const fingerW = h * 0.2;
+    const gap = h * 0.04;
+    const palmW = fingerW * 4 + gap * 3;
+    const right = width - this.px(spec.inset ?? 24);
+    const left = right - palmW;
+    const bottom = floor;
+    const palmTop = bottom - h * 0.36;
+    const lengths = [0.86, 1, 0.92, 0.72];
+
+    ctx.save();
+    ctx.globalAlpha = spec.opacity ?? 1;
+    ctx.fillStyle = spec.skin;
+    ctx.strokeStyle = theme.keyline;
+    ctx.lineWidth = this.px(1.5);
+
+    // Thumb, angled out to the left.
+    ctx.save();
+    ctx.translate(left + fingerW * 0.2, palmTop + h * 0.2);
+    ctx.rotate(-0.7);
+    this.roundRectPath(-fingerW, -h * 0.42, fingerW, h * 0.5, fingerW / 2, fingerW / 2, fingerW / 2, fingerW / 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    this.roundRectPath(left, palmTop, palmW, bottom - palmTop, fingerW * 0.4, fingerW * 0.4, fingerW * 0.7, fingerW * 0.7);
+    ctx.fill();
+    ctx.stroke();
+
+    for (let f = 0; f < 4; f++) {
+      const fx = left + f * (fingerW + gap);
+      const len = h * 0.62 * lengths[f];
+      const top = palmTop + fingerW * 0.4 - len;
+      const r = fingerW / 2;
+      this.roundRectPath(fx, top, fingerW, palmTop - top + fingerW * 0.4, r, r, 0, 0);
+      ctx.fillStyle = spec.skin;
+      ctx.fill();
+      ctx.stroke();
+
+      // The fingertip in its finger's colour, with its number.
+      const key = String(f + 1) as '1' | '2' | '3' | '4';
+      ctx.beginPath();
+      ctx.arc(fx + r, top + r, r, 0, Math.PI * 2);
+      ctx.fillStyle = theme.fingers[key];
+      ctx.fill();
+      ctx.stroke();
+      ctx.font = `700 ${fingerW * 0.78}px Manrope, sans-serif`;
+      ctx.fillStyle = pillTextFor(theme, key);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(key, fx + r, top + r + fingerW * 0.04);
+    }
+    ctx.restore();
   }
 
   // ---- notes ----------------------------------------------------
@@ -385,8 +798,9 @@ export class HighwayView {
   }
 
   private drawNotes(currentTick: number, width: number): void {
-    const rightEdgeTick = currentTick + (width - this.playLineX()) / this.pxPerTick + 2000;
-    const startIndex = this.firstVisibleIndex(currentTick - 2000);
+    const [minX, maxX] = this.flatXRange(width);
+    const rightEdgeTick = currentTick + (maxX - this.playLineX()) / this.pxPerTick + 2000;
+    const startIndex = this.firstVisibleIndex(currentTick + (minX - this.playLineX()) / this.pxPerTick - 2000);
 
     const byLane = new Map<number, Placed[]>();
     const chordGroups = new Map<number, Placed[]>();
@@ -403,7 +817,7 @@ export class HighwayView {
       // Every pill gives up the same nick from its tail, so notes never fuse
       // and every note of a given value still comes out the same length.
       const w = Math.max(pitchW - this.px(this.theme.geometry.nickGap), this.px(6));
-      if (x + pitchW < 0 || x > width) continue;
+      if (x + pitchW < minX || x > maxX) continue;
 
       const laneIndex = note.string - 1;
       if (laneIndex < 0 || laneIndex >= this.laneCount) continue;
@@ -414,6 +828,7 @@ export class HighwayView {
         w,
         pitchW,
         centerY: this.laneCenterY(laneIndex),
+        laneIndex,
         joinNext: 'none',
         joinPrev: 'none',
       };
@@ -447,12 +862,14 @@ export class HighwayView {
 
     this.lastLayout = [];
 
-    for (const [, laneNotes] of byLane) {
+    for (const [laneIndex, laneNotes] of byLane) {
       laneNotes.sort((a, b) => a.x - b.x);
       this.layoutLane(laneNotes);
-      this.drawLegatoChains(laneNotes);
-      this.drawSlideRails(laneNotes);
-      for (let i = 0; i < laneNotes.length; i++) this.drawMarks(laneNotes[i], laneNotes[i + 1], currentTick);
+      this.withLane(laneIndex, () => {
+        this.drawLegatoChains(laneNotes);
+        this.drawSlideRails(laneNotes);
+        for (let i = 0; i < laneNotes.length; i++) this.drawMarks(laneNotes[i], laneNotes[i + 1], currentTick);
+      });
     }
 
     this.drawChordPills([...namedChords.values()]);
@@ -583,7 +1000,7 @@ export class HighwayView {
       const item = chain[idx];
       // The hit-test rect is split at the seam (flush, so the cell's own
       // touching edge is the split point) — the same rect just filled.
-      this.lastLayout.push({ note: item.note, x: cells[idx].x, w: cells[idx].w, centerY: item.centerY, h: pillH });
+      this.lastLayout.push({ note: item.note, x: cells[idx].x, w: cells[idx].w, centerY: item.centerY, h: pillH, laneIndex: item.laneIndex });
       this.drawPillLabel(item);
     }
   }
@@ -612,7 +1029,7 @@ export class HighwayView {
 
     if (note.techniques.harmonic) {
       this.drawHarmonic(item);
-      this.lastLayout.push({ note, x: item.x, w: item.w, centerY: item.centerY, h: pillH });
+      this.lastLayout.push({ note, x: item.x, w: item.w, centerY: item.centerY, h: pillH, laneIndex: item.laneIndex });
       return;
     }
 
@@ -628,7 +1045,7 @@ export class HighwayView {
     ctx.restore();
 
     this.drawPillLabel(item);
-    this.lastLayout.push({ note, x: item.x, w: item.w, centerY: item.centerY, h: pillH });
+    this.lastLayout.push({ note, x: item.x, w: item.w, centerY: item.centerY, h: pillH, laneIndex: item.laneIndex });
   }
 
   /** The fret number (or the dead-note ×), centred on the note's own rect — never the seam-widened chain cell. */
@@ -951,6 +1368,9 @@ export class HighwayView {
     const offsetPx = this.px(theme.geometry.pmRailOffset ?? 10);
     ctx.save();
     for (const span of merged) {
+      ctx.save();
+      const t = this.laneTransform(nearestLane ? span.laneIndex : 0);
+      ctx.transform(t.s, 0, 0, t.s, t.dx, t.dy);
       const y = nearestLane
         ? span.laneIndex * this.laneHeight() + this.headerHeight() - offsetPx
         : headerY;
@@ -965,7 +1385,10 @@ export class HighwayView {
       ctx.fillText('P.M.', span.startX, y);
 
       const ruleStart = span.startX + ctx.measureText('P.M.').width + this.px(10);
-      if (span.endX <= ruleStart) continue;
+      if (span.endX <= ruleStart) {
+        ctx.restore();
+        continue;
+      }
       ctx.setLineDash([this.px(theme.geometry.pmDashOn), this.px(theme.geometry.pmDashOff)]);
       ctx.lineCap = 'round';
       for (const pass of ['halo', 'ink'] as const) {
@@ -980,6 +1403,7 @@ export class HighwayView {
         ctx.stroke();
       }
       ctx.setLineDash([]);
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -1027,16 +1451,36 @@ export class HighwayView {
     const bottom = Math.max(...group.map((item) => item.centerY)) + pillH / 2;
     const r = this.pillRadius();
 
+    // On the tilted board the block spans strings drawn at different scales,
+    // so its corners are placed on their own strings and it is traced as a
+    // four-cornered shape that leans with the bar lines.
+    const lanes = group.map((item) => item.laneIndex);
+    const tTop = this.laneTransform(Math.min(...lanes));
+    const tBottom = this.laneTransform(Math.max(...lanes));
+    const corners = [
+      this.applyLane(tTop, left, top),
+      this.applyLane(tTop, left + w, top),
+      this.applyLane(tBottom, left + w, bottom),
+      this.applyLane(tBottom, left, bottom),
+    ];
+    const sMid = (tTop.s + tBottom.s) / 2;
+
     ctx.save();
-    this.roundRectPath(left, top, w, bottom - top, r, r, r, r);
+    this.roundQuadPath(corners, r * sMid);
     ctx.fillStyle = (this.obsMode && theme.chordPillObs) || theme.chordPill;
     ctx.fill();
     ctx.strokeStyle = theme.chordPillKeyline ?? theme.keyline;
     ctx.globalAlpha = theme.chordPillKeylineOpacity ?? 1;
-    ctx.lineWidth = this.outlineWidth();
+    ctx.lineWidth = this.outlineWidth() * sMid;
     ctx.stroke();
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    // The name is drawn flat, under the block's middle scale, about its centre.
+    const cx = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
+    const cy = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
+    const flatCx = left + w / 2;
+    const flatCy = (top + bottom) / 2;
 
     // The block never grows to fit its name — a long name on a short chord
     // shrinks only down to the readability floor, then continues past the
@@ -1053,6 +1497,9 @@ export class HighwayView {
     const fittedWidth = ctx.measureText(name).width;
 
     ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(sMid, sMid);
+    ctx.translate(-flatCx, -flatCy);
     if (fittedWidth > maxTextWidth && theme.geometry.chordNameOverflow === 'right') {
       const gap = this.px(theme.geometry.chordNameOverflowGap ?? 10);
       ctx.textAlign = 'left';
@@ -1072,7 +1519,7 @@ export class HighwayView {
     ctx.restore();
 
     for (const item of group) {
-      this.lastLayout.push({ note: item.note, x: left, w, centerY: item.centerY, h: pillH });
+      this.lastLayout.push({ note: item.note, x: left, w, centerY: item.centerY, h: pillH, laneIndex: item.laneIndex });
     }
   }
 
@@ -1086,9 +1533,11 @@ export class HighwayView {
       const barStartX = item.x + item.w;
       const barEndX = this.xForTick(note.endTick, currentTick);
       if (barEndX <= barStartX) continue;
-      ctx.fillStyle = fingerColor(theme, note.finger);
-      this.roundRectPath(barStartX, item.centerY - barH / 2, barEndX - barStartX, barH, barH / 2, barH / 2, barH / 2, barH / 2);
-      ctx.fill();
+      this.withLane(item.laneIndex, () => {
+        ctx.fillStyle = fingerColor(theme, note.finger);
+        this.roundRectPath(barStartX, item.centerY - barH / 2, barEndX - barStartX, barH, barH / 2, barH / 2, barH / 2, barH / 2);
+        ctx.fill();
+      });
     }
   }
 
@@ -1099,14 +1548,18 @@ export class HighwayView {
     for (const group of chordGroups.values()) {
       if (group.length < 2) continue;
       const x = group[0].x + group[0].w / 2;
-      const ys = group.map((n) => n.centerY);
+      const ends = [...group].sort((a, b) => a.laneIndex - b.laneIndex);
+      const tTop = this.laneTransform(ends[0].laneIndex);
+      const tBottom = this.laneTransform(ends[ends.length - 1].laneIndex);
+      const top = this.applyLane(tTop, x, ends[0].centerY);
+      const bottom = this.applyLane(tBottom, x, ends[ends.length - 1].centerY);
       ctx.strokeStyle = theme.chordJoin;
       ctx.globalAlpha = theme.chordJoinOpacity;
-      ctx.lineWidth = joinW;
+      ctx.lineWidth = joinW * (tTop.s + tBottom.s) / 2;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(x, Math.min(...ys));
-      ctx.lineTo(x, Math.max(...ys));
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(bottom.x, bottom.y);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
@@ -1152,7 +1605,11 @@ export class HighwayView {
     const x = clientX - rect.left;
     const y = clientY - rect.top;
     for (const item of this.lastLayout) {
-      if (x >= item.x && x <= item.x + item.w && Math.abs(y - item.centerY) <= item.h / 2) {
+      // Back from screen into the lane's own flat coordinates.
+      const t = this.laneTransform(item.laneIndex);
+      const fx = (x - t.dx) / t.s;
+      const fy = (y - t.dy) / t.s;
+      if (fx >= item.x && fx <= item.x + item.w && Math.abs(fy - item.centerY) <= item.h / 2) {
         return item.note;
       }
     }
@@ -1166,6 +1623,25 @@ export class HighwayView {
     const width = ctx.measureText(text).width;
     if (width <= maxWidth || width === 0) return preferred;
     return Math.max(preferred * 0.3, preferred * (maxWidth / width));
+  }
+
+  /** A convex four-cornered shape with every corner rounded — the chord block on the tilted board. */
+  private roundQuadPath(corners: { x: number; y: number }[], radius: number): void {
+    const ctx = this.ctx;
+    const n = corners.length;
+    const shortest = Math.min(
+      ...corners.map((c, i) => Math.hypot(corners[(i + 1) % n].x - c.x, corners[(i + 1) % n].y - c.y)),
+    );
+    const r = Math.max(0, Math.min(radius, shortest / 2));
+    const start = { x: (corners[n - 1].x + corners[0].x) / 2, y: (corners[n - 1].y + corners[0].y) / 2 };
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    for (let i = 0; i < n; i++) {
+      const corner = corners[i];
+      const next = corners[(i + 1) % n];
+      ctx.arcTo(corner.x, corner.y, next.x, next.y, r);
+    }
+    ctx.closePath();
   }
 
   private roundRectPath(x: number, y: number, w: number, h: number, tl: number, tr: number, br: number, bl: number): void {

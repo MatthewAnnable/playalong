@@ -1,5 +1,5 @@
 import { AlphaTabApi, LayoutMode, PlayerMode, ScrollMode, Settings, StaveProfile } from '@coderline/alphatab';
-import { model, synth } from '@coderline/alphatab';
+import { midi, model, synth } from '@coderline/alphatab';
 import { playCountIn } from './countIn';
 import { extractBarMarkers, extractNotes, trackNamesChords, type BarMarker, type NoteEvent } from './notes';
 import { applyFingeringHeuristic } from './fingering';
@@ -7,6 +7,7 @@ import { applyOverrides, loadOverrides, overrideKey, setOverride } from './overr
 import { slugify } from './slug';
 import { buildTimeline, playedIndexAtTick, type PlayedBar } from './timeline';
 import * as clock from './clock';
+import { msAtTick, tempoAnchors, type TimeAnchor } from './audioTime';
 
 export interface EngineState {
   ready: boolean;
@@ -82,6 +83,8 @@ let score: model.Score | null = null;
  */
 let timeline: PlayedBar[] = [];
 let ticksPerQuarter = 960;
+/** Ticks → the recording's own time, for laying notes out along the progress bar. */
+let timeAnchors: TimeAnchor[] = [];
 let mediaOutput: synth.IExternalMediaSynthOutput | null = null;
 let horizontalScore = false;
 let presentationOn = false;
@@ -267,6 +270,27 @@ export function getExtrapolatedTick(): number {
   return clock.getExtrapolatedTick(mainAudio?.currentTime ?? 0);
 }
 
+/**
+ * The file's own sync points where it has them — the same ones playback
+ * follows, so a padded or rubato recording still lines up — and the written
+ * tempo where it doesn't.
+ */
+function buildTimeAnchors(loadedScore: model.Score): TimeAnchor[] {
+  let points: { synthTick: number; syncTime: number; syncBpm: number }[] = [];
+  try {
+    points = midi.MidiFileGenerator.generateSyncPoints(loadedScore);
+  } catch {
+    // No backing track to sync to: fall back to the tempo.
+  }
+  if (points.length > 0) return points.map((p) => ({ tick: p.synthTick, ms: p.syncTime, bpm: p.syncBpm }));
+  return tempoAnchors(timeline, loadedScore.tempo, ticksPerQuarter);
+}
+
+/** Where in the recording a playback tick lands, in seconds — what the progress bar runs on. */
+export function tickToAudioSeconds(tick: number): number {
+  return (msAtTick(timeAnchors, tick, ticksPerQuarter) + syncOffsetMs()) / 1000;
+}
+
 export function getTicksPerQuarter(): number {
   return ticksPerQuarter;
 }
@@ -381,6 +405,7 @@ function populateTrackSelect(loadedScore: model.Score): void {
   state.trackIndex = 0;
   ticksPerQuarter = computeTicksPerQuarter(loadedScore);
   timeline = buildTimeline(loadedScore);
+  timeAnchors = buildTimeAnchors(loadedScore);
   state.barMarkers = extractBarMarkers(timeline);
   loadNotesForTrack(loadedScore, 0);
   notify();
@@ -667,8 +692,12 @@ async function restartLoopWithCountIn(): Promise<void> {
   // Back to the pass of the start bar that was just played — inside a
   // repeat, the first pass through it could be a long way back.
   const startTick = barToTick(state.loopStartBar, api.player?.tickPosition ?? 0);
-  if (!(await runCountIn(startTick))) return;
+  // Seek *before* counting in, so the count-in shows the riff that's about
+  // to be played rather than sitting on the end of the pass that just
+  // finished — and the audio's re-decode for the seek runs under the clicks
+  // instead of as a gap after them.
   seekToTick(startTick);
+  if (!(await runCountIn(startTick))) return;
   api.play();
 }
 

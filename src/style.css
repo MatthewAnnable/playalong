@@ -352,12 +352,11 @@
   position: relative;
 }
 
+/* A row of its own above the board, not laid over it: the board's top strip
+   carries the bar numbers and the finger hand. */
 .highway-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 96px;
+  position: relative;
+  height: 56px;
   z-index: 1;
   display: flex;
   justify-content: space-between;
@@ -397,18 +396,33 @@
   max-height: 640px;
 }
 
-#app.presentation .highway-header {
-  display: none;
-}
-
+/* Presentation (and OBS, which is presentation on a transparent stage): the
+   board only takes the bottom of the screen — half, by default — so the top
+   half is free for the camera in OBS, or a video of the song being played
+   when it's shared with students. The song line rides just above the board.
+   `?board=0.4` (anything from 0.25 to 1) changes the share. */
 #app.presentation .highway-surface {
   border-radius: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 #app.presentation #highway-canvas {
-  height: 100vh;
-  /* The 640px cap belongs to the windowed stage; presentation fills the screen. */
+  height: calc(var(--board-fraction, 0.5) * 100vh);
+  min-height: 0;
+  /* The 640px cap belongs to the windowed stage. */
   max-height: none;
+}
+
+#app.presentation .highway-header {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: auto;
+  bottom: calc(var(--board-fraction, 0.5) * 100vh);
+  height: 64px;
 }
 
 /* Transport dock */
@@ -447,11 +461,77 @@
   text-align: center;
 }
 
-.scrubber {
+/* The progress bar is a map of the song too (see overview.ts): sections
+   named along the top, every note on its string in its finger's colour, on
+   the same dark ground as the board. The slider itself sits over it with no
+   track of its own, just a playhead for a thumb; what's been played is
+   dimmed. */
+.scrubber-wrap {
+  position: relative;
   flex: 1;
   min-width: 120px;
-  height: 44px;
-  accent-color: var(--ma-green);
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #171B14;
+}
+
+.overview-canvas,
+.overview-played,
+.scrubber {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.overview-played {
+  right: auto;
+  width: calc(var(--progress, 0) * 100%);
+  background: rgba(13, 17, 11, 0.5);
+  pointer-events: none;
+}
+
+.scrubber {
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.scrubber:focus-visible {
+  outline: 2px solid var(--ma-amber);
+  outline-offset: -2px;
+}
+
+.scrubber::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+
+.scrubber::-moz-range-track {
+  height: 100%;
+  background: transparent;
+}
+
+.scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 4px;
+  height: 56px;
+  border-radius: 2px;
+  background: var(--ma-amber);
+  box-shadow: 0 0 0 1px rgba(13, 17, 11, 0.7);
+}
+
+.scrubber::-moz-range-thumb {
+  width: 4px;
+  height: 56px;
+  border: none;
+  border-radius: 2px;
+  background: var(--ma-amber);
+  box-shadow: 0 0 0 1px rgba(13, 17, 11, 0.7);
 }
 
 .bar-counter {
@@ -762,6 +842,12 @@
   transition: opacity 0.15s ease;
 }
 
+/* On the half-height board the dock sits in the free top half, just above
+   the song line, so it never covers the low strings while it's up. */
+#app.presentation:has(#highway:not([hidden])) .transport-dock {
+  bottom: calc(var(--board-fraction, 0.5) * 100vh + 76px);
+}
+
 /* Faded, but still there to be pressed. When the dock also stopped taking
    clicks, a press on the play button landed on the score behind it and did
    nothing at all — the press both brings the dock back and works. */
@@ -851,7 +937,6 @@
 }
 
 #app.obs .highway-header {
-  display: flex;
   text-shadow: var(--stage-header-text-shadow, 0 1px 3px rgba(0, 0, 0, 0.8));
 }
 
@@ -902,7 +987,7 @@ body:has(#app.obs) {
     gap: 12px;
   }
 
-  .scrubber {
+  .scrubber-wrap {
     min-width: 60px;
   }
 }

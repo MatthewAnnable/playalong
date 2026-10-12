@@ -55,11 +55,15 @@ export function setHighwayObsMode(obs: boolean): void {
 /**
  * Fixed px-per-beat, not bars of look-ahead — musical spacing stays constant
  * as the stage resizes, so a sixteenth note is always wide enough to read.
- * At a 1080px-tall stage this yields a 300px beat (a 75px sixteenth).
+ * At a 1080px-tall stage this yields a 300px beat (a 75px sixteenth). A short,
+ * wide stage — the lower half of an OBS scene — is spaced by its width instead.
  */
 function computePxPerTick(): number {
-  const stageHeight = canvas.getBoundingClientRect().height;
-  const pxPerBeat = activeTheme.geometry.pxPerBeatRatio * stageHeight;
+  const { width, height } = canvas.getBoundingClientRect();
+  const pxPerBeat = Math.max(
+    activeTheme.geometry.pxPerBeatRatio * height,
+    (activeTheme.geometry.pxPerBeatWidthRatio ?? 0) * width,
+  );
   const ticksPerQuarter = getTicksPerQuarter();
   return ticksPerQuarter > 0 ? pxPerBeat / ticksPerQuarter : 0.1;
 }

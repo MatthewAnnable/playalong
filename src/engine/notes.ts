@@ -56,7 +56,13 @@ export interface BarMarker {
   tick: number;
   barNumber: number;
   sectionText?: string;
+  /** Beats in the bar (the time signature's top number) and how many ticks each lasts, for the beat grid. */
+  beats: number;
+  beatTicks: number;
 }
+
+/** alphaTab's fixed MIDI resolution. */
+const TICKS_PER_QUARTER = 960;
 
 /** One marker per bar *played*, so a repeated bar is marked every time round. */
 export function extractBarMarkers(timeline: PlayedBar[]): BarMarker[] {
@@ -64,6 +70,8 @@ export function extractBarMarkers(timeline: PlayedBar[]): BarMarker[] {
     tick: played.start,
     barNumber: played.barNumber,
     sectionText: played.masterBar.section?.text || undefined,
+    beats: played.masterBar.timeSignatureNumerator,
+    beatTicks: (TICKS_PER_QUARTER * 4) / played.masterBar.timeSignatureDenominator,
   }));
 }
 

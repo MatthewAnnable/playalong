@@ -1,6 +1,53 @@
 {
   "name": "default",
   "notes": "Play-Along stage theme. Colours only — geometry lives in the renderer. Lengths in this file are px at a 1080px-tall stage; scale linearly with stage height unless marked fixed. Round 2 revisions: the slide is now a contour rail (slideRail*), the legato join is a flush butt with a union outline (legatoJoin*, nickGap), hammer-on/pull-off arcs anchor to pill centres (hammerArcAnchor), the chord block keeps its length and lets a long name run past it (chordName*), and P.M. can rail above the string it is played on (pmRailPlacement).",
+  "board": {
+    "background": "#0B0D0A",
+    "backgroundNear": "#1C2019",
+    "edge": "#A8A29A",
+    "edgeOpacity": 0.35,
+    "farScale": 0.8,
+    "vanishX": 0.42,
+    "beatLine": "#A8A29A",
+    "beatLineOpacity": 0.26,
+    "offbeatLineOpacity": 0.1,
+    "playLineOpacity": 1,
+    "nearMargin": 36
+  },
+  "strings": {
+    "gauges": [4.5, 5.5, 7, 10.5, 13, 15.5],
+    "wound": [false, false, false, true, true, true],
+    "plainColors": {
+      "light": "#F4F6F8",
+      "mid": "#B9BEC4",
+      "dark": "#5E636A"
+    },
+    "woundColors": {
+      "light": "#F2C78E",
+      "mid": "#C08446",
+      "dark": "#5A3516"
+    }
+  },
+  "ball": {
+    "color": "#FBF8F3",
+    "radius": 13,
+    "risePerPx": 0.3,
+    "minRise": 18,
+    "maxRise": 150,
+    "trail": "#FBF8F3",
+    "trailOpacity": 0.5,
+    "dotRadius": 3.2,
+    "dotSpacing": 16,
+    "hopsAhead": 5,
+    "leadInTicks": 1920
+  },
+  "handLegend": {
+    "show": true,
+    "skin": "#E9D9C6",
+    "height": 150,
+    "inset": 24,
+    "opacity": 0.95
+  },
   "stage": {
     "background": "#171B14",
     "backgroundImage": null,
@@ -59,12 +106,13 @@
   "geometry": {
     "headerHeight": 96,
     "laneHeightFormula": "(stageHeight - headerHeight) / laneCount",
-    "pillHeightRatio": 0.585,
+    "pillHeightRatio": 0.76,
     "pillRadiusRatio": 0.21,
     "fretSizeRatio": 0.585,
     "fretWeight": 700,
     "fretTracking": "-0.02em",
     "pxPerBeatRatio": 0.278,
+    "pxPerBeatWidthRatio": 0.11,
     "runMergeGap": 8,
     "runCellNumberMinWidth": 56,
     "tieBarHeightRatio": 0.375,
@@ -138,6 +186,11 @@
     "chordNameMinSizeRatio": "Floor for chord-name type: 0.0259 × stage height = 28px at 1080. The name shrinks to this and no further.",
     "chordNameOverflow": "What a name does when it will not fit at the floor. 'right' = the block stays exactly as long as the chord and the name continues past its right edge as cream stage text with a halo, left-aligned to the block. 'shrink' restores the old behaviour.",
     "pmRailPlacement": "'nearest-lane' draws P.M. and its dashed rule in the clear lane above the highest muted string. 'header' restores the top-of-stage rail.",
-    "markHaloWidth": "Dark halo behind every cream mark — the only thing keeping marks legible in OBS."
+    "pillHeightRatio": "Share of each string's lane a pill fills. Raised 0.585→0.76 once the board went half-height (OBS, presentation): pills were thin strips with wide empty ground between strings and small, hard-to-read numbers. The number grows with it (fretSizeRatio is of pill height).",
+    "pxPerBeatWidthRatio": "Floor on beat width as a share of stage width, so a short wide board still spaces notes out. Lowered 0.15→0.11: at 0.15 a half-height OBS board scrolled nearly as fast as a full-height one with half-size numbers, so they blurred.",
+    "markHaloWidth": "Dark halo behind every cream mark — the only thing keeping marks legible in OBS.",
+    "board": "The dark board the strings run across. farScale is how big the far (high e) edge is drawn against the near (low E) edge — 1 lays it flat, 0.72 leans it away like looking down your own neck. vanishX is where the bar lines converge, as a share of stage width. Beat lines are faint, off-beat (quaver) lines fainter still; 0 hides them.",
+    "strings": "High e first. The top three are plain steel, the bottom three bronze-wound, and each is drawn at its own gauge, so a note's string can be told from the string itself.",
+    "ball": "Hops from each note onto the next, landing as it's played. A hop is risePerPx of its length tall, clamped to minRise–maxRise. The dotted trail shows hopsAhead hops still to come."
   }
 }

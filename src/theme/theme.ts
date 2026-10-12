@@ -7,6 +7,8 @@ export interface ThemeGeometry {
   fretWeight: number;
   fretTracking: string;
   pxPerBeatRatio: number;
+  /** A floor on beat width as a share of stage width, so a short, wide stage (OBS's lower half) still spaces notes out. */
+  pxPerBeatWidthRatio?: number;
   runMergeGap: number;
   runCellNumberMinWidth: number;
   /** Stage ground left between two consecutive notes that are picked separately. */
@@ -84,8 +86,73 @@ export interface ThemeObs {
   textShadow: string;
 }
 
+/** The dark board the strings run across, and how far it leans away. */
+export interface ThemeBoard {
+  /** Ground at the far (top) edge and the near (bottom) edge. */
+  background: string;
+  backgroundNear?: string;
+  /** Hairline along the board's far edge. */
+  edge?: string;
+  edgeOpacity?: number;
+  /** How big the far edge is drawn relative to the near edge: 1 = flat, lower = steeper lean. */
+  farScale: number;
+  /** Where the bar lines converge, as a fraction of stage width. */
+  vanishX: number;
+  beatLine?: string;
+  beatLineOpacity?: number;
+  /** The quaver lines between beats; 0 hides them. */
+  offbeatLineOpacity?: number;
+  playLineOpacity?: number;
+  /** Ground under the nearest string, px at a 1080px stage. */
+  nearMargin?: number;
+}
+
+export interface StringColors {
+  light: string;
+  mid: string;
+  dark: string;
+}
+
+/** Strings listed high e first. Gauges are px at a 1080px stage. */
+export interface ThemeStrings {
+  gauges: number[];
+  wound: boolean[];
+  plainColors: StringColors;
+  woundColors: StringColors;
+}
+
+/** The ball that hops from note to note. Lengths are px at a 1080px stage. */
+export interface ThemeBall {
+  color: string;
+  radius: number;
+  /** Hop height as a share of its length, clamped between minRise and maxRise. */
+  risePerPx?: number;
+  minRise?: number;
+  maxRise: number;
+  trail: string;
+  trailOpacity: number;
+  dotRadius?: number;
+  dotSpacing?: number;
+  /** How many hops ahead the dotted trail shows. */
+  hopsAhead?: number;
+  /** Ticks before the first note that the ball drops in, and lingers after the last. */
+  leadInTicks?: number;
+}
+
+export interface ThemeHandLegend {
+  show: boolean;
+  skin: string;
+  height?: number;
+  inset?: number;
+  opacity?: number;
+}
+
 export interface Theme {
   name: string;
+  board?: ThemeBoard;
+  strings?: ThemeStrings;
+  ball?: ThemeBall;
+  handLegend?: ThemeHandLegend;
   stage: { background: string; backgroundImage: string | null; backgroundOpacity: number; transparentInObs?: boolean };
   lane: string;
   laneOpacity: number;

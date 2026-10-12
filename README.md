@@ -24,6 +24,35 @@ Press `Escape` to come back.
 Drag the progress bar and the score and the highway follow your thumb, so you
 can see where you are about to land before you let go.
 
+The progress bar is also a map of the song. Each section is named along the
+top, and every note sits on its string in its finger's colour, so you can see
+where the busy riff or the solo is and drag straight to it. What you've
+already played is dimmed, and a loop shows as an amber band.
+
+## The board
+
+The highway is drawn as six real strings on a dark board, tilted away from
+you the way you look down at your own neck: the low E nearest and largest,
+the high e furthest and smallest. The top three strings are thin plain steel
+and the bottom three thicker bronze-wound, so you can tell a note's string
+from the string it sits on.
+
+Bar lines lean with the tilt. Between them, faint lines mark each beat and
+fainter ones the off-beats, so you can see whether a note lands on the beat
+or on the "and".
+
+A ball hops from note to note and lands on each one as it's played. The
+height of each hop grows with the gap, and dotted arcs show the next few hops,
+so you can see how long until the next note before it arrives. A hand in the
+top corner shows which colour is which finger.
+
+In presentation and OBS mode the board fills only the bottom half of the
+screen, on its own solid ground. In OBS the camera above it still shows you
+playing; in presentation the top half is kept free for a video of the song
+being played, and the transport dock sits there too so it never covers the
+low strings. Add `&board=0.4` (anything from 0.25 to 1) to the URL to change
+how much of the screen the board takes.
+
 ## How the highway shows joins
 
 Notes on the same string sit apart when they are apart in time. Two notes

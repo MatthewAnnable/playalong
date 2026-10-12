@@ -16,6 +16,7 @@ import { registerAction } from './shortcuts';
 const playButton = document.querySelector<HTMLButtonElement>('#play-button')!;
 const playButtonLabel = document.querySelector<HTMLSpanElement>('#play-button-label')!;
 const scrubber = document.querySelector<HTMLInputElement>('#scrubber')!;
+const scrubberWrap = document.querySelector<HTMLDivElement>('#scrubber-wrap')!;
 const timeCurrent = document.querySelector<HTMLSpanElement>('#time-current')!;
 const timeTotal = document.querySelector<HTMLSpanElement>('#time-total')!;
 const barCurrent = document.querySelector<HTMLSpanElement>('#bar-current')!;
@@ -49,6 +50,15 @@ const SCRUBBER_RESOLUTION = 1000;
  */
 function setText(el: HTMLElement, value: string): void {
   if (el.textContent !== value) el.textContent = value;
+}
+
+/** How much of the song overview is dimmed as already played. */
+let lastProgress = '';
+function setProgress(ratio: number): void {
+  const value = ratio.toFixed(4);
+  if (value === lastProgress) return;
+  lastProgress = value;
+  scrubberWrap.style.setProperty('--progress', value);
 }
 
 function formatTime(seconds: number): string {
@@ -133,6 +143,7 @@ export function initControls(): void {
       scrubber.max = String(SCRUBBER_RESOLUTION);
       const ratio = state.durationSec > 0 ? state.currentTimeSec / state.durationSec : 0;
       scrubber.value = String(Math.round(ratio * SCRUBBER_RESOLUTION));
+      setProgress(ratio);
     }
     durationSec = state.durationSec;
     setText(timeCurrent, formatTime(state.currentTimeSec));
@@ -213,6 +224,7 @@ export function initControls(): void {
   });
   scrubber.addEventListener('input', () => {
     const ratio = Number(scrubber.value) / SCRUBBER_RESOLUTION;
+    setProgress(ratio);
     timeCurrent.textContent = formatTime(ratio * durationSec);
     if (isScrubbing) previewScrub();
   });

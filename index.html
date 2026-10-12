@@ -102,7 +102,11 @@
         <button id="play-button" class="btn-amber" type="button"><span id="play-button-label">Play</span></button>
 
         <span id="time-current" class="time">0:00</span>
-        <input id="scrubber" class="scrubber" type="range" min="0" max="1000" value="0" />
+        <div id="scrubber-wrap" class="scrubber-wrap">
+          <canvas id="overview-canvas" class="overview-canvas" aria-hidden="true"></canvas>
+          <div class="overview-played"></div>
+          <input id="scrubber" class="scrubber" type="range" min="0" max="1000" value="0" aria-label="Song position" />
+        </div>
         <span id="time-total" class="time">0:00</span>
 
         <div class="dock-group">

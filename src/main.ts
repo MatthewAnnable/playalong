@@ -18,6 +18,7 @@ import {
 } from './engine/alphatab';
 import { slugify } from './engine/slug';
 import { initControls } from './ui/controls';
+import { initOverview } from './ui/overview';
 import { initHighway, isHighwayVisible, setHighwayView } from './ui/highway';
 import { listRecentSongs, saveRecentSong, type RecentSong } from './ui/library';
 import { buildPracticeLink, readLinkParams, type LinkParams } from './ui/links';
@@ -292,6 +293,7 @@ initShortcuts();
 initShortcutsPanel();
 registerAction('copyLink', copyPracticeLink);
 initControls();
+initOverview();
 initHighway();
 
 linkParams = readLinkParams();
