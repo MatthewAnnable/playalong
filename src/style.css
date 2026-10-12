@@ -425,6 +425,25 @@
   height: 64px;
 }
 
+/* The video of the song being played, filling the top half above the song
+   line in presentation mode (see video.ts). Cropped to fit rather than
+   letterboxed; the manifest's videoFocusY picks which band of the frame is
+   kept, so the hands stay in shot on a wide screen. */
+.song-video {
+  display: none;
+}
+
+#app.presentation:not(.obs) .song-video:not([hidden]) {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc((1 - var(--board-fraction, 0.5)) * 100vh - 64px);
+  object-fit: cover;
+  background: #000;
+}
+
 /* Transport dock */
 
 .transport-dock {

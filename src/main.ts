@@ -19,6 +19,7 @@ import {
 import { slugify } from './engine/slug';
 import { initControls } from './ui/controls';
 import { initOverview } from './ui/overview';
+import { clearSongVideo, setSongVideo } from './ui/video';
 import { initHighway, isHighwayVisible, setHighwayView } from './ui/highway';
 import { listRecentSongs, saveRecentSong, type RecentSong } from './ui/library';
 import { buildPracticeLink, readLinkParams, type LinkParams } from './ui/links';
@@ -77,6 +78,7 @@ async function loadSong(file: File): Promise<void> {
   try {
     const buffer = await readFileAsArrayBuffer(file);
     await openScore(buffer);
+    clearSongVideo();
     hasSongLoaded = true;
     revealPlayer();
     const meta = getScoreMeta();
@@ -111,6 +113,7 @@ async function loadRecentSong(song: RecentSong): Promise<void> {
   setStatus(`Loading "${song.title}"…`);
   try {
     await openScore(song.buffer.slice(0));
+    clearSongVideo();
     hasSongLoaded = true;
     revealPlayer();
     songTitleEl.textContent = song.title;
@@ -308,6 +311,11 @@ async function openManifestSong(manifestUrl: string, song: ManifestSong): Promis
   const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
   await openScore(buffer);
   setSongOffsets(song.audioOffsetSeconds, song.noGuitarOffsetSeconds);
+  if (song.videoFile) {
+    setSongVideo(resolveSongUrl(manifestUrl, { ...song, file: song.videoFile }), song.videoOffsetSeconds, song.videoFocusY);
+  } else {
+    clearSongVideo();
+  }
   if (song.noGuitarFile) {
     const noGuitarBuffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, { ...song, file: song.noGuitarFile }));
     const noGuitarFile = new File([noGuitarBuffer], 'no-guitar.mp3', { type: 'audio/mpeg' });

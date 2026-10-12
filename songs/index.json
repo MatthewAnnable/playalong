@@ -9,6 +9,9 @@
       "defaultTrack": 0,
       "audioOffsetSeconds": 0,
       "noGuitarOffsetSeconds": 0.06,
+      "videoFile": "songs/r-u-mine/video.mp4",
+      "videoOffsetSeconds": 0,
+      "videoFocusY": 45,
       "theme": "default",
       "tags": []
     }

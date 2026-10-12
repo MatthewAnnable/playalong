@@ -53,6 +53,31 @@ being played, and the transport dock sits there too so it never covers the
 low strings. Add `&board=0.4` (anything from 0.25 to 1) to the URL to change
 how much of the screen the board takes.
 
+## A video of the song being played
+
+A library song can carry a silent video of you playing it, shown in the top
+half of presentation mode above the board. It follows the recording exactly:
+play, pause, scrubbing, loops and slower speeds all carry the video along,
+so at 70% the student sees your hands at 70% too.
+
+To add one, record a camera-only take in OBS while playing along to the
+Play-Along from the start of the song. Then trim it so its first frame is the
+recording's first moment, shrink it to 720p and drop the sound:
+
+    ffmpeg -i take.mp4 -ss <seconds before the song starts> -an -vf scale=1280:720 \
+      -c:v libx264 -preset slow -crf 25 -g 30 -movflags +faststart songs/<slug>/video.mp4
+
+and add it to the song in `songs/index.json`:
+
+    "videoFile": "songs/<slug>/video.mp4",
+    "videoOffsetSeconds": 0,
+    "videoFocusY": 45
+
+`videoOffsetSeconds` nudges it if your hands look early or late (+ shows the
+video later). `videoFocusY` picks which band of the frame is kept when it's
+cropped to fit the screen, from 0 (top) to 100 (bottom). Keep the file under
+50MB so GitHub takes it; a full song at these settings is about 40MB.
+
 ## How the highway shows joins
 
 Notes on the same string sit apart when they are apart in time. Two notes

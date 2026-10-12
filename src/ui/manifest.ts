@@ -9,6 +9,15 @@ export interface ManifestSong {
   audioOffsetSeconds?: number;
   /** How many seconds the no-guitar recording runs behind the main one (measure it; R U Mine's is 0.06). */
   noGuitarOffsetSeconds?: number;
+  /**
+   * A silent video of the song being played, trimmed so its first frame is
+   * the recording's first moment. Shown above the board in presentation mode.
+   */
+  videoFile?: string;
+  /** Seconds to slide the video against the recording if it's a touch early or late (+ shows it later). */
+  videoOffsetSeconds?: number;
+  /** Which part of the frame to keep when the video is cropped to fit, 0 (top) to 100 (bottom). Default 50. */
+  videoFocusY?: number;
   theme?: string;
   tags?: string[];
 }
