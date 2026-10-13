@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harmony skin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-board">
+    <div id="viewport">
+      <div id="stage"></div>
+    </div>
+
+    <footer id="controls">
+      <div class="hc-song">
+        <span class="hc-title" id="hc-title"></span>
+        <span class="hc-sub" id="hc-sub"></span>
+      </div>
+      <span class="hc-pos" id="hc-pos"></span>
+      <button class="hc-button" id="hc-restart" type="button">Restart</button>
+      <button class="hc-button hc-play" id="hc-play" type="button">Play</button>
+      <label class="hc-hide-narrow">
+        <select class="hc-select" id="hc-click" aria-label="Click">
+          <option value="all">Click on</option>
+          <option value="countin">Count-in only</option>
+          <option value="off">Click off</option>
+        </select>
+      </label>
+      <label class="hc-hide-narrow">
+        <select class="hc-select" id="hc-bg" aria-label="Background">
+          <option value="board">Dark background</option>
+          <option value="transparent">See-through</option>
+          <option value="media" disabled>Your footage</option>
+        </select>
+      </label>
+      <label class="hc-button hc-hide-narrow" style="display: inline-flex; align-items: center">
+        Open chart
+        <input class="hc-file" id="hc-file" type="file" accept=".txt,text/plain,image/*,video/*" />
+      </label>
+    </footer>
+
+    <script type="module" src="/src/harmony/main.ts"></script>
+  </body>
+</html>

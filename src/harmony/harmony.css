@@ -1,0 +1,450 @@
+/*
+ * Harmony skin. Stage geometry is in px on a 1920×1080 stage; the page
+ * scales the whole stage to fit, so these never need media queries.
+ *
+ * House palette — colour means the function family and nothing else.
+ * Amber is the playhead only.
+ */
+:root {
+  --hx-T: #486f44;
+  --hx-T-text: #fbf8f3;
+  --hx-S: #cbb490;
+  --hx-S-text: #1c211a;
+  --hx-D: #c1728d;
+  --hx-D-text: #1c211a;
+  --hx-none: #a8a29a;
+  --hx-none-text: #1c211a;
+
+  --hx-cream: #fbf8f3;
+  --hx-ink-ground: #1c211a;
+  --hx-keyline: #0d110b;
+  --hx-amber: #f7a630;
+  --hx-faint: #a8a29a;
+  --hx-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 2px rgba(0, 0, 0, 0.5);
+
+  --hx-serif: Newsreader, Georgia, 'Times New Roman', serif;
+  --hx-sans: Manrope, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0b0d0a;
+  font-family: var(--hx-sans);
+  color: var(--hx-cream);
+}
+
+/* Both html and body must be see-through in OBS, or the page's own dark
+   ground covers the camera. */
+html.obs,
+body.obs {
+  background: transparent;
+}
+
+/* ---- stage ---- */
+
+#viewport {
+  position: fixed;
+  inset: 0 0 76px 0;
+  overflow: hidden;
+}
+
+body.obs #viewport {
+  inset: 0;
+}
+
+#stage {
+  position: absolute;
+  width: 1920px;
+  height: 1080px;
+  transform-origin: 0 0;
+  overflow: hidden;
+  background: var(--hx-ink-ground);
+}
+
+body.bg-transparent #stage {
+  background-color: #2a2f28;
+  background-image: conic-gradient(#323830 25%, #262b24 0 50%, #323830 0 75%, #262b24 0);
+  background-size: 48px 48px;
+}
+
+body.obs #stage {
+  background: transparent;
+}
+
+.hx-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hx-overlay {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---- function colours ---- */
+
+.fn-T { background: var(--hx-T); color: var(--hx-T-text); }
+.fn-S { background: var(--hx-S); color: var(--hx-S-text); }
+.fn-D { background: var(--hx-D); color: var(--hx-D-text); }
+.fn-none { background: var(--hx-none); color: var(--hx-none-text); }
+
+/* ---- key line ---- */
+
+.hx-eyebrow {
+  position: absolute;
+  left: 61px;
+  top: 46px;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: pre;
+  text-shadow: var(--hx-shadow);
+}
+
+/* ---- the chord now ---- */
+
+.hx-now {
+  position: absolute;
+  left: 61px;
+  top: 96px;
+  width: 300px;
+  height: 215px;
+  box-sizing: border-box;
+  padding: 20px 30px 22px;
+  border-radius: 30px;
+  border: 3px solid var(--hx-keyline);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.hx-now.outside {
+  border: 4px dashed var(--hx-cream);
+}
+
+.hx-now.count-in {
+  background: rgba(28, 33, 26, 0.78);
+  color: var(--hx-cream);
+  border-color: rgba(251, 248, 243, 0.35);
+}
+
+.hx-now-chord {
+  font-family: var(--hx-serif);
+  font-size: 112px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.hx-now-chord[data-len='3'] { font-size: 96px; }
+.hx-now-chord[data-len='4'] { font-size: 80px; }
+.hx-now-chord[data-len='5'] { font-size: 66px; }
+.hx-now-chord[data-len='6'] { font-size: 56px; }
+
+.hx-now-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  white-space: nowrap;
+}
+
+.hx-now-numeral {
+  font-family: var(--hx-serif);
+  font-style: italic;
+  font-size: 42px;
+  line-height: 1;
+}
+
+.hx-now-fn {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hx-note {
+  position: absolute;
+  left: 61px;
+  top: 326px;
+  font-family: var(--hx-serif);
+  font-style: italic;
+  font-size: 28px;
+  text-shadow: var(--hx-shadow);
+}
+
+/* ---- what's coming ---- */
+
+.hx-strip {
+  position: absolute;
+  left: 384px;
+  top: 106px;
+  height: 170px;
+  overflow: hidden;
+  /* chords fade in and out at the ends rather than being cut off */
+  mask-image: linear-gradient(to right, transparent 0, #000 70px, #000 calc(100% - 110px), transparent 100%);
+}
+
+.hx-track {
+  position: absolute;
+  inset: 0;
+}
+
+.hx-pill {
+  position: absolute;
+  left: 0;
+  top: 52px;
+  height: 92px;
+  box-sizing: border-box;
+  padding: 0 28px;
+  border-radius: 999px;
+  border: 3px solid var(--hx-keyline);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  white-space: nowrap;
+  transition: opacity 200ms ease;
+  will-change: transform;
+}
+
+.hx-pill.outside {
+  border: 4px dashed var(--hx-cream);
+}
+
+.hx-pill.no-chord {
+  background: rgba(28, 33, 26, 0.6);
+  color: var(--hx-cream);
+  border: 3px dashed rgba(251, 248, 243, 0.45);
+}
+
+.hx-pill.past {
+  opacity: 0.4;
+}
+
+.hx-pill-chord {
+  font-family: var(--hx-serif);
+  font-size: 46px;
+  line-height: 1;
+}
+
+.hx-pill-numeral {
+  font-family: var(--hx-serif);
+  font-style: italic;
+  font-size: 33px;
+  line-height: 1;
+}
+
+.hx-pill.size-mid .hx-pill-numeral,
+.hx-pill.size-small .hx-pill-numeral {
+  display: none;
+}
+.hx-pill.size-mid .hx-pill-chord { font-size: 40px; }
+.hx-pill.size-small { padding: 0; justify-content: center; }
+.hx-pill.size-small .hx-pill-chord { font-size: 26px; }
+
+.hx-pill-section {
+  position: absolute;
+  left: 4px;
+  top: -46px;
+  font-family: var(--hx-sans);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hx-cream);
+  text-shadow: var(--hx-shadow);
+}
+
+.hx-playhead {
+  position: absolute;
+  top: 40px;
+  width: 5px;
+  height: 116px;
+  margin-left: -2px;
+  border-radius: 3px;
+  background: var(--hx-amber);
+  box-shadow: 0 0 0 1.5px var(--hx-keyline);
+}
+
+/* ---- key wheel ---- */
+
+.hx-wheel {
+  position: absolute;
+  left: 1551px;
+  top: 38px;
+}
+
+.hx-disc {
+  position: absolute;
+  width: 77px;
+  height: 77px;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px solid var(--hx-keyline);
+  opacity: 0.6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: width 160ms ease, height 160ms ease, opacity 160ms ease;
+}
+
+.hx-disc.on {
+  width: 100px;
+  height: 100px;
+  opacity: 1;
+  border: 5px solid var(--hx-cream);
+}
+
+.hx-wheel.dim .hx-disc {
+  opacity: 0.35;
+}
+
+.hx-disc-numeral {
+  font-family: var(--hx-serif);
+  font-style: italic;
+  font-size: 29px;
+}
+
+.hx-disc.on .hx-disc-numeral {
+  font-size: 38px;
+}
+
+.hx-disc-name {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.hx-centre {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.05;
+  text-shadow: var(--hx-shadow);
+}
+
+.hx-centre-tonic {
+  font-family: var(--hx-serif);
+  font-size: 50px;
+}
+
+.hx-centre-mode {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hx-centre.outside-chord {
+  width: 104px;
+  height: 104px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 4px dashed var(--hx-cream);
+  justify-content: center;
+  text-shadow: none;
+}
+
+/* ---- preview controls (not in OBS) ---- */
+
+#controls {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 76px;
+  box-sizing: border-box;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--hx-ink-ground);
+  border-top: 1px solid rgba(168, 162, 154, 0.25);
+  font-size: 14px;
+}
+
+body.obs #controls {
+  display: none;
+}
+
+.hc-song {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.hc-title {
+  font-family: var(--hx-serif);
+  font-size: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hc-sub {
+  color: var(--hx-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hc-warn {
+  color: #e8c9a0;
+}
+
+.hc-button,
+.hc-select {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(168, 162, 154, 0.45);
+  background: transparent;
+  color: var(--hx-cream);
+  font: 600 14px var(--hx-sans);
+  cursor: pointer;
+}
+
+.hc-select {
+  appearance: none;
+  padding-right: 18px;
+}
+
+.hc-play {
+  min-width: 112px;
+  min-height: 52px;
+  border: 0;
+  background: var(--hx-amber);
+  color: #2e2a28;
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 4px 14px rgba(247, 166, 48, 0.35);
+}
+
+.hc-pos {
+  font-variant-numeric: tabular-nums;
+  color: var(--hx-faint);
+  white-space: nowrap;
+}
+
+.hc-file {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .hc-hide-narrow {
+    display: none;
+  }
+}

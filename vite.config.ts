@@ -33,6 +33,8 @@ export default defineConfig({
       input: {
         main: 'index.html',
         remote: 'remote.html',
+        // harmony.html is the chord-song harmony skin, driven by a chord chart.
+        harmony: 'harmony.html',
       },
     },
   },

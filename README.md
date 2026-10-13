@@ -156,6 +156,29 @@ so it sits over your camera with no black box. It follows the remote tab, so
 you never need to click inside OBS. "Audio from OBS" swaps which side makes
 the sound.
 
+## Harmony skin (chord songs)
+
+`harmony.html` is a separate page for chord-song videos: the chord now, its
+Roman numeral and function, the chords coming up, and a key wheel. It runs
+from a hand-written chord chart rather than a Guitar Pro file, at the
+chart's tempo with a count-in and click.
+
+- Preview: `harmony.html?chart=test`. Space plays and pauses, R restarts,
+  the arrow keys move a bar, C changes the click. Drop a chart, a photo or
+  a video on the page to try it against real footage.
+- OBS: a Browser Source at `harmony.html?chart=test&mode=obs`, 1920×1080. It
+  is see-through and starts itself two seconds after loading (`&delay=` to
+  change). Tick "Control audio via OBS" and set the source to Monitor Only
+  in Advanced Audio Properties, so the click is in your headphones but not
+  the recording. Press Refresh in the source's properties to start again.
+- Charts live in `public/harmony/charts/<name>.txt`, which is never
+  committed. The format is described at the top of `src/harmony/chart.ts`.
+
+Colour means the function family and nothing else: tonic green, subdominant
+sand, dominant rose (House palette). A chord from outside the key keeps its
+family's colour with a dashed edge. Which degree belongs to which family is
+set in `src/harmony/analysis.ts`.
+
 ## The hosted library (off by default)
 
 The app is drag-and-drop only, and this repo contains no songs. To switch on
