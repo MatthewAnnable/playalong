@@ -1,6 +1,16 @@
 {
   "songs": [
     {
+      "slug": "from-the-beginning",
+      "title": "From the Beginning",
+      "artist": "Emerson, Lake & Palmer",
+      "file": "songs/from-the-beginning/song.gp",
+      "defaultTrack": 0,
+      "audioOffsetSeconds": 0,
+      "theme": "default",
+      "tags": []
+    },
+    {
       "slug": "r-u-mine",
       "title": "R U Mine",
       "artist": "Arctic Monkeys",
