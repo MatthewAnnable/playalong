@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { msAtTick, tempoAnchors } from './audioTime';
+import { msAtTick, tempoAnchors, ticksPerSecondAtTick } from './audioTime';
 import type { PlayedBar } from './timeline';
 
 describe('msAtTick', () => {
@@ -11,6 +11,18 @@ describe('msAtTick', () => {
     expect(msAtTick(anchors, 480, 960)).toBe(-500);
     // Past the last point: 60 bpm, a quarter a second.
     expect(msAtTick(anchors, 1920, 960)).toBe(1000);
+  });
+
+  it('gives the sync points\' speed, not the written tempo, for the highway between updates', () => {
+    // A recording slowed so 1920 ticks (two quarters) take 2s: 60 bpm, though the
+    // anchors say 130.
+    const anchors = [
+      { tick: 0, ms: 0, bpm: 130 },
+      { tick: 1920, ms: 2000, bpm: 130 },
+    ];
+    expect(ticksPerSecondAtTick(anchors, 960, 960)).toBe(960);
+    // Past the last point there's no next one to measure against: its tempo.
+    expect(ticksPerSecondAtTick(anchors, 3000, 960)).toBe((130 / 60) * 960);
   });
 
   it('turns the written tempo into anchors when there are no sync points', () => {

@@ -28,6 +28,22 @@ export function tempoAnchors(timeline: PlayedBar[], startBpm: number, ticksPerQu
 }
 
 /**
+ * How fast playback ticks pass per second of recording at `tick`: the slope
+ * of the anchor segment it sits in, so it follows the sync points (a slowed
+ * or rubato recording) rather than the written tempo. Outside the anchors it
+ * is the nearest anchor's own tempo.
+ */
+export function ticksPerSecondAtTick(anchors: TimeAnchor[], tick: number, ticksPerQuarter: number): number {
+  if (anchors.length === 0) return 0;
+  let lo = 0;
+  while (lo + 1 < anchors.length && anchors[lo + 1].tick <= tick) lo++;
+  const a = anchors[lo];
+  const b = anchors[lo + 1];
+  if (tick >= a.tick && b && b.tick > a.tick && b.ms > a.ms) return ((b.tick - a.tick) / (b.ms - a.ms)) * 1000;
+  return (a.bpm / 60) * ticksPerQuarter;
+}
+
+/**
  * Where in the recording (ms) a tick lands. Between two anchors it's a
  * straight line from one to the next, so a sync point's stretch is honoured;
  * before the first or after the last it runs at that anchor's tempo.

@@ -7,7 +7,7 @@ import { applyOverrides, loadOverrides, overrideKey, setOverride } from './overr
 import { slugify } from './slug';
 import { buildTimeline, playedIndexAtTick, type PlayedBar } from './timeline';
 import * as clock from './clock';
-import { msAtTick, tempoAnchors, type TimeAnchor } from './audioTime';
+import { msAtTick, tempoAnchors, ticksPerSecondAtTick, type TimeAnchor } from './audioTime';
 
 export interface EngineState {
   ready: boolean;
@@ -252,7 +252,9 @@ function updateFromPlayback(): void {
   state.currentTimeSec = mainAudio.currentTime;
   if (Number.isFinite(mainAudio.duration)) state.durationSec = mainAudio.duration;
   state.currentBar = findBarAtTick(tick);
-  const ticksPerSecond = (tempoAtTick(tick) / 60) * ticksPerQuarter;
+  // The speed the highway glides at until the next update: the sync points'
+  // own, so a slowed or rubato recording doesn't run ahead and snap back.
+  const ticksPerSecond = ticksPerSecondAtTick(timeAnchors, tick, ticksPerQuarter);
   clock.recordSample(mainAudio.currentTime, tick, ticksPerSecond);
   // alphaTab's own looping (api.isLooping) just snaps the audio back with no
   // run-up — see restartLoopWithCountIn — so looping is driven from here
@@ -307,7 +309,7 @@ export function getPositionSnapshot(): {
   return {
     audioSeconds: mainAudio?.currentTime ?? 0,
     tick,
-    ticksPerSecond: (tempoAtTick(tick) / 60) * ticksPerQuarter,
+    ticksPerSecond: ticksPerSecondAtTick(timeAnchors, tick, ticksPerQuarter),
     playbackRate: mainAudio?.playbackRate ?? 1,
     isPlaying: state.isPlaying,
   };
