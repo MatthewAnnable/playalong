@@ -8,6 +8,7 @@ import { slugify } from './slug';
 import { buildTimeline, playedIndexAtTick, type PlayedBar } from './timeline';
 import * as clock from './clock';
 import { msAtTick, tempoAnchors, ticksPerSecondAtTick, type TimeAnchor } from './audioTime';
+import { mainTimeFromSpeedFile, speedFileFor, speedFileTime, type SpeedFileMap } from './speedFiles';
 
 export interface EngineState {
   ready: boolean;
@@ -25,6 +26,8 @@ export interface EngineState {
   loopEndBar: number;
   guitarOn: boolean;
   hasNoGuitarTrack: boolean;
+  /** True while a pre-rendered slow recording is playing instead of the browser-stretched one. */
+  speedFromRecording: boolean;
   trackNames: string[];
   trackIndex: number;
   /** True when the file names chords, which is what decides the chord-pill default. */
@@ -75,6 +78,27 @@ let mainAudio: HTMLAudioElement | null = null;
 let noGuitarAudio: HTMLAudioElement | null = null;
 let mainObjectUrl: string | null = null;
 let noGuitarObjectUrl: string | null = null;
+
+/** The song's pre-rendered slow recordings, speed percent → URL (see speedFiles.ts). */
+let speedFiles: SpeedFileMap | undefined;
+/** Slow recordings already fetched, kept so going back to a speed is instant. */
+const speedAudio = new Map<number, HTMLAudioElement>();
+/**
+ * The slow recording playing in place of the main one, if any. While it is,
+ * the main recording sits paused and this one is the clock.
+ */
+let activeSpeedAudio: HTMLAudioElement | null = null;
+let activeSpeedPercent = 100;
+let speedSwitchToken = 0;
+/** How long the speed must stay put before its slow recording is fetched. */
+const SPEED_FILE_SETTLE_MS = 500;
+
+/** Where we are in the main recording's time, whichever recording is actually playing. */
+function clockSeconds(): number {
+  if (activeSpeedAudio) return mainTimeFromSpeedFile(activeSpeedAudio.currentTime, activeSpeedPercent);
+  return mainAudio?.currentTime ?? 0;
+}
+
 let positionLoopId = 0;
 let score: model.Score | null = null;
 /**
@@ -108,6 +132,7 @@ const state: EngineState = {
   loopEndBar: 1,
   guitarOn: true,
   hasNoGuitarTrack: false,
+  speedFromRecording: false,
   trackNames: [],
   trackIndex: 0,
   hasChordNames: false,
@@ -165,13 +190,14 @@ function makeExternalMediaHandler(el: HTMLAudioElement): synth.IExternalMediaHan
     seekTo(time: number): void {
       const seconds = Math.max(0, (time + syncOffsetMs()) / 1000);
       el.currentTime = seconds;
+      if (activeSpeedAudio) activeSpeedAudio.currentTime = speedFileTime(seconds, activeSpeedPercent);
       if (noGuitarAudio) noGuitarAudio.currentTime = noGuitarTimeFor(seconds);
     },
     play(): void {
       // Safari (and iOS especially) refuses playback that didn't come from a
       // user gesture. Surface that so an autoplay link can show a "tap to
       // start" overlay instead of silently doing nothing (build plan §9).
-      el.play().then(
+      (activeSpeedAudio ?? el).play().then(
         () => {
           if (state.audioBlocked) {
             state.audioBlocked = false;
@@ -193,6 +219,7 @@ function makeExternalMediaHandler(el: HTMLAudioElement): synth.IExternalMediaHan
     },
     pause(): void {
       el.pause();
+      activeSpeedAudio?.pause();
       if (noGuitarAudio) noGuitarAudio.pause();
     },
   };
@@ -249,13 +276,13 @@ function computeTicksPerQuarter(loadedScore: model.Score): number {
 function updateFromPlayback(): void {
   if (!api || !mainAudio) return;
   const tick = api.player?.tickPosition ?? 0;
-  state.currentTimeSec = mainAudio.currentTime;
+  state.currentTimeSec = clockSeconds();
   if (Number.isFinite(mainAudio.duration)) state.durationSec = mainAudio.duration;
   state.currentBar = findBarAtTick(tick);
   // The speed the highway glides at until the next update: the sync points'
   // own, so a slowed or rubato recording doesn't run ahead and snap back.
   const ticksPerSecond = ticksPerSecondAtTick(timeAnchors, tick, ticksPerQuarter);
-  clock.recordSample(mainAudio.currentTime, tick, ticksPerSecond);
+  clock.recordSample(clockSeconds(), tick, ticksPerSecond);
   // alphaTab's own looping (api.isLooping) just snaps the audio back with no
   // run-up — see restartLoopWithCountIn — so looping is driven from here
   // instead: the moment playback crosses past the loop's last bar, restart it
@@ -269,7 +296,7 @@ function updateFromPlayback(): void {
 }
 
 export function getExtrapolatedTick(): number {
-  return clock.getExtrapolatedTick(mainAudio?.currentTime ?? 0);
+  return clock.getExtrapolatedTick(clockSeconds());
 }
 
 /**
@@ -307,7 +334,7 @@ export function getPositionSnapshot(): {
 } {
   const tick = api?.player?.tickPosition ?? 0;
   return {
-    audioSeconds: mainAudio?.currentTime ?? 0,
+    audioSeconds: clockSeconds(),
     tick,
     ticksPerSecond: ticksPerSecondAtTick(timeAnchors, tick, ticksPerQuarter),
     playbackRate: mainAudio?.playbackRate ?? 1,
@@ -350,6 +377,7 @@ export function stopLocalPositionLoop(): void {
 export function setMuted(muted: boolean): void {
   if (mainAudio) mainAudio.muted = muted;
   if (noGuitarAudio) noGuitarAudio.muted = muted;
+  for (const el of speedAudio.values()) el.muted = muted;
 }
 
 function applyGuitarVolumes(guitarOn: boolean, immediate: boolean): void {
@@ -419,6 +447,7 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
   mainAudio?.pause();
   noGuitarAudio?.pause();
   noGuitarAudio = null;
+  clearSpeedFiles();
   if (mainObjectUrl) URL.revokeObjectURL(mainObjectUrl);
   if (noGuitarObjectUrl) URL.revokeObjectURL(noGuitarObjectUrl);
   mainObjectUrl = null;
@@ -500,8 +529,9 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
       // the small gap on loop-back — this only trims the detection delay on
       // top of that, not the decode itself.
       positionLoopId = window.setInterval(() => {
-        output.updatePosition(mainAudio!.currentTime * 1000 - syncOffsetMs());
+        output.updatePosition(clockSeconds() * 1000 - syncOffsetMs());
         keepNoGuitarAligned();
+        keepSpeedRecordingRunning();
         updateFromPlayback();
       }, 20);
 
@@ -770,7 +800,8 @@ async function runCountIn(tick: number): Promise<boolean> {
   const token = ++countInToken;
   state.countingIn = true;
   notify();
-  await playCountIn(masterBar.timeSignatureNumerator, tempoAtTick(tick));
+  // At 70% the song plays at 70% of its tempo, so the count-in has to as well.
+  await playCountIn(masterBar.timeSignatureNumerator, (tempoAtTick(tick) * state.speed) / 100);
   if (token !== countInToken) return false;
   state.countingIn = false;
   notify();
@@ -882,6 +913,7 @@ export function seekToSeconds(seconds: number): void {
   const duration = Number.isFinite(mainAudio.duration) ? mainAudio.duration : seconds;
   const clamped = Math.min(Math.max(seconds, 0), duration);
   mainAudio.currentTime = clamped;
+  if (activeSpeedAudio) activeSpeedAudio.currentTime = speedFileTime(clamped, activeSpeedPercent);
   if (noGuitarAudio) noGuitarAudio.currentTime = noGuitarTimeFor(clamped);
   mediaOutput?.updatePosition(clamped * 1000 - syncOffsetMs());
   forceCursorToCurrentTick();
@@ -915,7 +947,7 @@ export function setSongOffsets(audioOffsetSeconds = 0, noGuitarOffsetSeconds = 0
 /** Re-reads the audio clock through the current offsets, so a change shows even while paused. */
 function resyncPosition(): void {
   if (!mainAudio || !mediaOutput) return;
-  mediaOutput.updatePosition(mainAudio.currentTime * 1000 - syncOffsetMs());
+  mediaOutput.updatePosition(clockSeconds() * 1000 - syncOffsetMs());
   forceCursorToCurrentTick();
   updateFromPlayback();
 }
@@ -923,6 +955,120 @@ function resyncPosition(): void {
 export function setSpeed(percent: number): void {
   state.speed = percent;
   if (api) api.playbackSpeed = percent / 100;
+  useSpeedFile(percent);
+  notify();
+}
+
+/** Tells the engine which pre-rendered slow recordings this song has (speed percent → URL). */
+export function setSpeedFiles(files: SpeedFileMap | undefined): void {
+  clearSpeedFiles();
+  speedFiles = files;
+  if (state.speed !== 100) useSpeedFile(state.speed);
+}
+
+function clearSpeedFiles(): void {
+  speedSwitchToken++;
+  for (const el of speedAudio.values()) {
+    el.pause();
+    el.removeAttribute('src');
+    el.load();
+  }
+  speedAudio.clear();
+  activeSpeedAudio = null;
+  activeSpeedPercent = 100;
+  state.speedFromRecording = false;
+  speedFiles = undefined;
+}
+
+/**
+ * A play() can be lost while one recording hands over to the other (a
+ * pause or a seek in between interrupts it). If the song should be playing but
+ * the recording that is the clock is sitting paused, start it again, at most
+ * once a second.
+ */
+let lastSpeedRestart = 0;
+function keepSpeedRecordingRunning(): void {
+  if (!speedFiles || !mainAudio || !state.isPlaying || state.countingIn) return;
+  const el = activeSpeedAudio ?? mainAudio;
+  if (!el.paused || el.ended) return;
+  const now = performance.now();
+  if (now - lastSpeedRestart < 1000) return;
+  lastSpeedRestart = now;
+  void el.play().catch(() => {});
+}
+
+/**
+ * Plays the speed from its pre-rendered recording where the song has one.
+ * The main recording carries on (stretched by the browser) until the slow one
+ * has loaded at the right spot, then hands over, so changing speed never
+ * stops the music. Not used with a no-guitar track, which has no slow versions.
+ */
+function useSpeedFile(percent: number): void {
+  if (!mainAudio) return;
+  speedSwitchToken++;
+  if (activeSpeedAudio && activeSpeedPercent !== percent) {
+    // Back to the main recording, at the same moment, before anything else.
+    const seconds = clockSeconds();
+    const wasRunning = !activeSpeedAudio.paused;
+    activeSpeedAudio.pause();
+    activeSpeedAudio = null;
+    activeSpeedPercent = 100;
+    state.speedFromRecording = false;
+    mainAudio.currentTime = seconds;
+    if (wasRunning) void mainAudio.play();
+  }
+  const url = speedFileFor(speedFiles, percent);
+  if (!url || state.hasNoGuitarTrack || activeSpeedPercent === percent) return;
+  const token = speedSwitchToken;
+  const start = () => {
+    if (token !== speedSwitchToken || !mainAudio) return;
+    let el = speedAudio.get(percent);
+    if (!el) {
+      el = new Audio();
+      el.preload = 'auto';
+      el.muted = mainAudio.muted;
+      el.src = url;
+      speedAudio.set(percent, el);
+    }
+    void switchToSpeedFile(percent, el, token);
+  };
+  // Clicking from 100% down to 70% passes 95, 90… on the way: only fetch the
+  // speed it settles on, not every file in between. A speed already fetched
+  // is used straight away.
+  if (speedAudio.has(percent)) start();
+  else window.setTimeout(start, SPEED_FILE_SETTLE_MS);
+}
+
+function waitFor(el: HTMLAudioElement, event: string): Promise<void> {
+  return new Promise((resolve) => el.addEventListener(event, () => resolve(), { once: true }));
+}
+
+async function switchToSpeedFile(percent: number, el: HTMLAudioElement, token: number): Promise<void> {
+  const current = () => token === speedSwitchToken && state.speed === percent && !!mainAudio;
+  if (el.readyState < HTMLMediaElement.HAVE_METADATA) await waitFor(el, 'loadedmetadata');
+  if (!current()) return;
+  // Load the slow recording where the song will be in a moment, then line it
+  // up exactly and swap. The second seek lands in what has just loaded.
+  el.currentTime = speedFileTime(mainAudio!.currentTime + 0.3 * (percent / 100), percent);
+  await waitFor(el, 'seeked');
+  if (el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) await waitFor(el, 'canplay');
+  if (!current()) return;
+  const running = !mainAudio!.paused;
+  el.currentTime = speedFileTime(mainAudio!.currentTime, percent);
+  activeSpeedAudio = el;
+  activeSpeedPercent = percent;
+  if (running) {
+    try {
+      await el.play();
+    } catch {
+      activeSpeedAudio = null;
+      activeSpeedPercent = 100;
+      return;
+    }
+    if (!current()) return;
+    mainAudio!.pause();
+  }
+  state.speedFromRecording = true;
   notify();
 }
 
@@ -1002,3 +1148,4 @@ export async function replaceMainAudio(file: File): Promise<void> {
   if (wasPlaying) void mainAudio.play();
   notify();
 }
+

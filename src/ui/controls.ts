@@ -185,6 +185,7 @@ export function initControls(): void {
 
     speedSlider.value = String(state.speed);
     setText(speedValue, `${state.speed}%`);
+    speedValue.title = state.speedFromRecording ? 'Playing a studio-quality slowed recording' : '';
 
     loopToggle.checked = state.loopEnabled;
     loopChip.classList.toggle('is-disabled', !state.loopEnabled);

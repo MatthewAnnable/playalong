@@ -8,7 +8,19 @@
       "defaultTrack": 0,
       "audioOffsetSeconds": 0,
       "theme": "default",
-      "tags": []
+      "tags": [],
+      "speedFiles": {
+        "50": "songs/from-the-beginning/speed-50.mp3",
+        "55": "songs/from-the-beginning/speed-55.mp3",
+        "60": "songs/from-the-beginning/speed-60.mp3",
+        "65": "songs/from-the-beginning/speed-65.mp3",
+        "70": "songs/from-the-beginning/speed-70.mp3",
+        "75": "songs/from-the-beginning/speed-75.mp3",
+        "80": "songs/from-the-beginning/speed-80.mp3",
+        "85": "songs/from-the-beginning/speed-85.mp3",
+        "90": "songs/from-the-beginning/speed-90.mp3",
+        "95": "songs/from-the-beginning/speed-95.mp3"
+      }
     },
     {
       "slug": "r-u-mine",

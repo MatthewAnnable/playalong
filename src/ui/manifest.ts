@@ -18,6 +18,12 @@ export interface ManifestSong {
   videoOffsetSeconds?: number;
   /** Which part of the frame to keep when the video is cropped to fit, 0 (top) to 100 (bottom). Default 50. */
   videoFocusY?: number;
+  /**
+   * Pre-rendered slow recordings (Rubber Band), speed percent → file, e.g.
+   * { "50": "songs/x/speed-50.mp3" }. Each is the main recording slowed by
+   * exactly that much from the same start. Speeds without one use the browser.
+   */
+  speedFiles?: Record<string, string>;
   theme?: string;
   tags?: string[];
 }

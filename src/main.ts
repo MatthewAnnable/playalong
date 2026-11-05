@@ -7,6 +7,7 @@ import {
   onStateChange,
   openScore,
   setSongOffsets,
+  setSpeedFiles,
   replaceMainAudio,
   setGuitarOn,
   setLoop,
@@ -311,6 +312,12 @@ async function openManifestSong(manifestUrl: string, song: ManifestSong): Promis
   const buffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, song));
   await openScore(buffer);
   setSongOffsets(song.audioOffsetSeconds, song.noGuitarOffsetSeconds);
+  setSpeedFiles(
+    song.speedFiles &&
+      Object.fromEntries(
+        Object.entries(song.speedFiles).map(([percent, file]) => [percent, resolveSongUrl(manifestUrl, { ...song, file })]),
+      ),
+  );
   if (song.videoFile) {
     setSongVideo(resolveSongUrl(manifestUrl, { ...song, file: song.videoFile }), song.videoOffsetSeconds, song.videoFocusY);
   } else {
