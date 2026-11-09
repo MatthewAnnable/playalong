@@ -39,7 +39,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          # The site carries ~170 MB of audio and video; GitHub's file sync
-          # sometimes takes longer than the default 10 minutes.
-          timeout: 1800000
