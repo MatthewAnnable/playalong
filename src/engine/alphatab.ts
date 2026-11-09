@@ -81,8 +81,19 @@ let noGuitarObjectUrl: string | null = null;
 
 /** The song's pre-rendered slow recordings, speed percent → URL (see speedFiles.ts). */
 let speedFiles: SpeedFileMap | undefined;
-/** Slow recordings already fetched, kept so going back to a speed is instant. */
-const speedAudio = new Map<number, HTMLAudioElement>();
+/**
+ * One audio element for every slow recording, reused as the speed changes.
+ * Safari only lets an element start from code (after a count-in, or once a
+ * file has loaded) if a tap or click has started that same element before.
+ * A fresh element per speed never had that, so Safari refused it and playback
+ * stalled; this one is started once, silently, from the first Play or speed
+ * press (see unlockSpeedAudio), and keeps the permission whatever it plays.
+ */
+let speedEl: HTMLAudioElement | null = null;
+let speedElUrl = '';
+let speedElUnlocked = false;
+/** Set once a browser refuses the slow recordings anyway: the browser stretcher carries on alone. */
+let speedFilesRefused = false;
 /**
  * The slow recording playing in place of the main one, if any. While it is,
  * the main recording sits paused and this one is the clock.
@@ -197,7 +208,18 @@ function makeExternalMediaHandler(el: HTMLAudioElement): synth.IExternalMediaHan
       // Safari (and iOS especially) refuses playback that didn't come from a
       // user gesture. Surface that so an autoplay link can show a "tap to
       // start" overlay instead of silently doing nothing (build plan §9).
-      (activeSpeedAudio ?? el).play().then(
+      if (activeSpeedAudio) {
+        const speed = activeSpeedAudio;
+        speed.play().catch((err: DOMException) => {
+          if (err?.name !== 'NotAllowedError') return;
+          // Refused: carry on from the same spot on the main recording instead.
+          fallBackFromSpeedFile(true);
+          void el.play();
+        });
+        if (noGuitarAudio) void noGuitarAudio.play();
+        return;
+      }
+      el.play().then(
         () => {
           if (state.audioBlocked) {
             state.audioBlocked = false;
@@ -377,7 +399,7 @@ export function stopLocalPositionLoop(): void {
 export function setMuted(muted: boolean): void {
   if (mainAudio) mainAudio.muted = muted;
   if (noGuitarAudio) noGuitarAudio.muted = muted;
-  for (const el of speedAudio.values()) el.muted = muted;
+  if (speedEl) speedEl.muted = muted;
 }
 
 function applyGuitarVolumes(guitarOn: boolean, immediate: boolean): void {
@@ -810,6 +832,7 @@ async function runCountIn(tick: number): Promise<boolean> {
 
 export async function togglePlay(): Promise<void> {
   if (!api) return;
+  unlockSpeedAudio();
 
   // A second press during the count-in means "get on with it". It used to
   // cancel back to a standstill, which is indistinguishable from the button
@@ -953,6 +976,7 @@ function resyncPosition(): void {
 }
 
 export function setSpeed(percent: number): void {
+  unlockSpeedAudio();
   state.speed = percent;
   if (api) api.playbackSpeed = percent / 100;
   useSpeedFile(percent);
@@ -968,12 +992,7 @@ export function setSpeedFiles(files: SpeedFileMap | undefined): void {
 
 function clearSpeedFiles(): void {
   speedSwitchToken++;
-  for (const el of speedAudio.values()) {
-    el.pause();
-    el.removeAttribute('src');
-    el.load();
-  }
-  speedAudio.clear();
+  speedEl?.pause();
   activeSpeedAudio = null;
   activeSpeedPercent = 100;
   state.speedFromRecording = false;
@@ -1006,52 +1025,110 @@ function keepSpeedRecordingRunning(): void {
 function useSpeedFile(percent: number): void {
   if (!mainAudio) return;
   speedSwitchToken++;
-  if (activeSpeedAudio && activeSpeedPercent !== percent) {
-    // Back to the main recording, at the same moment, before anything else.
-    const seconds = clockSeconds();
-    const wasRunning = !activeSpeedAudio.paused;
-    activeSpeedAudio.pause();
-    activeSpeedAudio = null;
-    activeSpeedPercent = 100;
-    state.speedFromRecording = false;
-    mainAudio.currentTime = seconds;
-    if (wasRunning) void mainAudio.play();
-  }
+  if (activeSpeedAudio && activeSpeedPercent !== percent) fallBackFromSpeedFile(false);
   const url = speedFileFor(speedFiles, percent);
-  if (!url || state.hasNoGuitarTrack || activeSpeedPercent === percent) return;
+  if (!url || state.hasNoGuitarTrack || speedFilesRefused || activeSpeedPercent === percent) return;
   const token = speedSwitchToken;
-  const start = () => {
+  // Clicking from 100% down to 70% passes 95, 90… on the way: only fetch the
+  // speed it settles on, not every file in between.
+  window.setTimeout(() => {
     if (token !== speedSwitchToken || !mainAudio) return;
-    let el = speedAudio.get(percent);
-    if (!el) {
-      el = new Audio();
-      el.preload = 'auto';
-      el.muted = mainAudio.muted;
+    const el = getSpeedEl();
+    if (speedElUrl !== url) {
+      speedElUrl = url;
       el.src = url;
-      speedAudio.set(percent, el);
     }
     void switchToSpeedFile(percent, el, token);
-  };
-  // Clicking from 100% down to 70% passes 95, 90… on the way: only fetch the
-  // speed it settles on, not every file in between. A speed already fetched
-  // is used straight away.
-  if (speedAudio.has(percent)) start();
-  else window.setTimeout(start, SPEED_FILE_SETTLE_MS);
+  }, SPEED_FILE_SETTLE_MS);
 }
 
-function waitFor(el: HTMLAudioElement, event: string): Promise<void> {
-  return new Promise((resolve) => el.addEventListener(event, () => resolve(), { once: true }));
+/** Back to the main recording at the same moment; `refused` stops using slow recordings for good. */
+function fallBackFromSpeedFile(refused: boolean): void {
+  if (refused) speedFilesRefused = true;
+  if (!mainAudio || !activeSpeedAudio) return;
+  const seconds = clockSeconds();
+  const wasRunning = !activeSpeedAudio.paused;
+  activeSpeedAudio.pause();
+  activeSpeedAudio = null;
+  activeSpeedPercent = 100;
+  state.speedFromRecording = false;
+  mainAudio.currentTime = seconds;
+  if (wasRunning) void mainAudio.play();
+  notify();
+}
+
+function getSpeedEl(): HTMLAudioElement {
+  if (!speedEl) {
+    speedEl = new Audio();
+    speedEl.preload = 'auto';
+    speedEl.muted = mainAudio?.muted ?? false;
+  }
+  return speedEl;
+}
+
+/** A tenth of a second of silence, for unlocking the slow-recording element. */
+function silentWavUrl(): string {
+  const samples = 4410;
+  const bytes = new Uint8Array(44 + samples * 2);
+  const view = new DataView(bytes.buffer);
+  const text = (at: number, value: string) => [...value].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + samples * 2, true);
+  text(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 44100, true);
+  view.setUint32(28, 88200, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  text(36, 'data');
+  view.setUint32(40, samples * 2, true);
+  return URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+}
+
+/**
+ * Starts the slow-recording element once, silently, from inside a tap or
+ * click, so Safari will let it play later on its own. Called by the Play and
+ * speed controls; does nothing for a song without slow recordings or once done.
+ */
+export function unlockSpeedAudio(): void {
+  if (!speedFiles || speedElUnlocked || speedFilesRefused) return;
+  const el = getSpeedEl();
+  if (activeSpeedAudio === el) return;
+  const silent = silentWavUrl();
+  el.src = silent;
+  speedElUrl = '';
+  el.play().then(
+    () => {
+      speedElUnlocked = true;
+      el.pause();
+      URL.revokeObjectURL(silent);
+    },
+    () => URL.revokeObjectURL(silent),
+  );
+}
+
+/** Waits for an event, but not forever: a browser that never sends it just means no hand-over. */
+function waitFor(el: HTMLAudioElement, event: string, timeoutMs = 10000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(false), timeoutMs);
+    el.addEventListener(event, () => {
+      window.clearTimeout(timer);
+      resolve(true);
+    }, { once: true });
+  });
 }
 
 async function switchToSpeedFile(percent: number, el: HTMLAudioElement, token: number): Promise<void> {
   const current = () => token === speedSwitchToken && state.speed === percent && !!mainAudio;
-  if (el.readyState < HTMLMediaElement.HAVE_METADATA) await waitFor(el, 'loadedmetadata');
+  if (el.readyState < HTMLMediaElement.HAVE_METADATA && !(await waitFor(el, 'loadedmetadata'))) return;
   if (!current()) return;
   // Load the slow recording where the song will be in a moment, then line it
   // up exactly and swap. The second seek lands in what has just loaded.
   el.currentTime = speedFileTime(mainAudio!.currentTime + 0.3 * (percent / 100), percent);
-  await waitFor(el, 'seeked');
-  if (el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) await waitFor(el, 'canplay');
+  if (!(await waitFor(el, 'seeked'))) return;
+  if (el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA && !(await waitFor(el, 'canplay'))) return;
   if (!current()) return;
   const running = !mainAudio!.paused;
   el.currentTime = speedFileTime(mainAudio!.currentTime, percent);
@@ -1060,9 +1137,10 @@ async function switchToSpeedFile(percent: number, el: HTMLAudioElement, token: n
   if (running) {
     try {
       await el.play();
-    } catch {
+    } catch (err) {
       activeSpeedAudio = null;
       activeSpeedPercent = 100;
+      if ((err as DOMException)?.name === 'NotAllowedError') speedFilesRefused = true;
       return;
     }
     if (!current()) return;
