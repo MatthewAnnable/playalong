@@ -1089,6 +1089,11 @@ export class HighwayView {
   /**
    * A harmonic is a diamond rather than a pill, sized from the lane like every
    * other note, with the number fitted to the width across its waist.
+   *
+   * A harmonic left to ring is longer than its diamond. Centred on the whole
+   * length, the diamond then arrived well after the note was played, so it
+   * sits at the note's start instead (its left tip on the start, like a
+   * pill's left edge), with a lighter bar behind it for as long as it rings.
    */
   private drawHarmonic(item: Placed): void {
     const ctx = this.ctx;
@@ -1096,7 +1101,23 @@ export class HighwayView {
     const pillH = this.pillHeight();
     const half = (pillH / 2) * theme.geometry.harmonicSizeRatio;
     const side = half * Math.SQRT1_2 * 2;
-    const cx = item.x + item.w / 2;
+    const rings = item.w > half * 2;
+    const cx = rings ? item.x + half : item.x + item.w / 2;
+
+    if (rings) {
+      const barH = pillH * 0.5;
+      const r = barH / 2;
+      ctx.save();
+      this.roundRectPath(item.x, item.centerY - barH / 2, item.w, barH, r, r, r, r);
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = fingerColor(theme, item.note.finger);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = theme.keyline;
+      ctx.lineWidth = this.outlineWidth();
+      ctx.stroke();
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(cx, item.centerY);
