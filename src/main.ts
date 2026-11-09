@@ -20,7 +20,7 @@ import {
 import { slugify } from './engine/slug';
 import { initControls } from './ui/controls';
 import { initOverview } from './ui/overview';
-import { clearSongVideo, setSongVideo } from './ui/video';
+import { clearSongVideo, setSongVideos } from './ui/video';
 import { initHighway, isHighwayVisible, setHighwayView } from './ui/highway';
 import { listRecentSongs, saveRecentSong, type RecentSong } from './ui/library';
 import { buildPracticeLink, readLinkParams, type LinkParams } from './ui/links';
@@ -318,11 +318,17 @@ async function openManifestSong(manifestUrl: string, song: ManifestSong): Promis
         Object.entries(song.speedFiles).map(([percent, file]) => [percent, resolveSongUrl(manifestUrl, { ...song, file })]),
       ),
   );
+  const videos = (song.videos ?? []).map((v) => ({
+    url: resolveSongUrl(manifestUrl, { ...song, file: v.file }),
+    track: v.track,
+    offsetSeconds: v.offsetSeconds,
+    focusY: v.focusY,
+  }));
   if (song.videoFile) {
-    setSongVideo(resolveSongUrl(manifestUrl, { ...song, file: song.videoFile }), song.videoOffsetSeconds, song.videoFocusY);
-  } else {
-    clearSongVideo();
+    videos.push({ url: resolveSongUrl(manifestUrl, { ...song, file: song.videoFile }), track: undefined, offsetSeconds: song.videoOffsetSeconds, focusY: song.videoFocusY });
   }
+  if (videos.length) setSongVideos(videos);
+  else clearSongVideo();
   if (song.noGuitarFile) {
     const noGuitarBuffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, { ...song, file: song.noGuitarFile }));
     const noGuitarFile = new File([noGuitarBuffer], 'no-guitar.mp3', { type: 'audio/mpeg' });

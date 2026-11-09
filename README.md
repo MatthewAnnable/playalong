@@ -87,6 +87,23 @@ video later). `videoFocusY` picks which band of the frame is kept when it's
 cropped to fit the screen, from 0 (top) to 100 (bottom). Keep the file under
 50MB so GitHub takes it; a full song at these settings is about 40MB.
 
+### A video per track, or for part of a song
+
+A song with more than one track can have a video for each, and a video can
+cover just part of the song: a solo needs filming only for the solo. Each
+video shows only with its own track, and only while the recording is inside
+the stretch it was filmed for; the rest of the time the board has the stage.
+Keep the whole take (no trimming) and say where its first frame belongs in
+the recording instead:
+
+    "videos": [
+      { "file": "songs/<slug>/solo-video.mp4", "track": 1, "offsetSeconds": 222.015, "focusY": 55 }
+    ]
+
+`track` is 0 for the first track (leave it out to show with every track).
+`offsetSeconds` is found by lining your playing in the take up with the
+track's note times. From the Beginning's solo take is the worked example.
+
 ## How the highway shows joins
 
 Notes on the same string sit apart when they are apart in time. Two notes

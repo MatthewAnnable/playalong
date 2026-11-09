@@ -20,7 +20,15 @@
         "85": "songs/from-the-beginning/speed-85.mp3",
         "90": "songs/from-the-beginning/speed-90.mp3",
         "95": "songs/from-the-beginning/speed-95.mp3"
-      }
+      },
+      "videos": [
+        {
+          "file": "songs/from-the-beginning/solo-video.mp4",
+          "track": 1,
+          "offsetSeconds": 222.015,
+          "focusY": 55
+        }
+      ]
     },
     {
       "slug": "r-u-mine",

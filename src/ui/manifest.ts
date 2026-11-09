@@ -19,6 +19,13 @@ export interface ManifestSong {
   /** Which part of the frame to keep when the video is cropped to fit, 0 (top) to 100 (bottom). Default 50. */
   videoFocusY?: number;
   /**
+   * Videos per track, for a song filmed part by part. Each shows only with its
+   * track (0 is the first; leave it out for every track) and only during the
+   * stretch it covers: `offsetSeconds` is where in the recording its first
+   * frame belongs, so a solo can be filmed for just the solo.
+   */
+  videos?: { file: string; track?: number; offsetSeconds?: number; focusY?: number }[];
+  /**
    * Pre-rendered slow recordings (Rubber Band), speed percent → file, e.g.
    * { "50": "songs/x/speed-50.mp3" }. Each is the main recording slowed by
    * exactly that much from the same start. Speeds without one use the browser.
