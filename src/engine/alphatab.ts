@@ -346,6 +346,11 @@ export function getTicksPerQuarter(): number {
   return ticksPerQuarter;
 }
 
+/** The song's opening written tempo, which sets how widely the highway spaces its beats. */
+export function getSongBpm(): number {
+  return score?.tempo || 120;
+}
+
 /** Snapshot the follower page needs to reconstruct our position. */
 export function getPositionSnapshot(): {
   tick: number;

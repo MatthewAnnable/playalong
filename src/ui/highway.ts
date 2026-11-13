@@ -3,6 +3,7 @@ import {
   getCurrentTempo,
   getExtrapolatedTick,
   getScoreMeta,
+  getSongBpm,
   getTicksPerQuarter,
   onStateChange,
   setScoreViewVisible,
@@ -31,6 +32,7 @@ let showingHighway = false;
 let tickSource: () => number = getExtrapolatedTick;
 let activeTheme: Theme = defaultTheme as Theme;
 let lastHasChordNames: boolean | null = null;
+let lastSpacingKey = '';
 
 /** OBS mode swaps in a transparent-stage theme so nothing paints a box. */
 export function setHighwayTheme(theme: Theme): void {
@@ -53,6 +55,19 @@ export function setHighwayObsMode(obs: boolean): void {
 }
 
 /**
+ * Beats are spaced for songs up to this tempo. Above it a beat gets narrower in
+ * proportion, so the board never scrolls faster than it does at 120 bpm: at full
+ * spacing a 207 bpm song (I Bet You Look Good on the Dancefloor) ran at twice R U
+ * Mine's speed and the numbers blurred. Its eighth notes still come out wider than
+ * a slow song's sixteenths.
+ */
+export const SPACING_FULL_UP_TO_BPM = 120;
+
+export function fastSongSpacing(bpm: number): number {
+  return bpm > SPACING_FULL_UP_TO_BPM ? SPACING_FULL_UP_TO_BPM / bpm : 1;
+}
+
+/**
  * Fixed px-per-beat, not bars of look-ahead — musical spacing stays constant
  * as the stage resizes, so a sixteenth note is always wide enough to read.
  * At a 1080px-tall stage this yields a 300px beat (a 75px sixteenth). A short,
@@ -63,7 +78,7 @@ function computePxPerTick(): number {
   const pxPerBeat = Math.max(
     activeTheme.geometry.pxPerBeatRatio * height,
     (activeTheme.geometry.pxPerBeatWidthRatio ?? 0) * width,
-  );
+  ) * fastSongSpacing(getSongBpm());
   const ticksPerQuarter = getTicksPerQuarter();
   return ticksPerQuarter > 0 ? pxPerBeat / ticksPerQuarter : 0.1;
 }
@@ -129,6 +144,12 @@ export function initHighway(): void {
     if (!usingRemoteTick) barInfoEl.textContent = `Bar ${state.currentBar} / ${state.totalBars}`;
     trackNameEl.textContent = state.trackNames[state.trackIndex] ?? '';
     if (state.ready) {
+      // A newly opened song may space its beats differently (fast songs are narrower).
+      const spacingKey = `${getSongBpm()}/${getTicksPerQuarter()}`;
+      if (view && spacingKey !== lastSpacingKey) {
+        lastSpacingKey = spacingKey;
+        view.setPxPerTick(computePxPerTick());
+      }
       const meta = getScoreMeta();
       titleEl.textContent = meta.title;
       artistEl.textContent = meta.artist ? `— ${meta.artist}` : '';
