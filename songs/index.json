@@ -31,6 +31,28 @@
       ]
     },
     {
+      "slug": "i-bet-you-look-good-on-the-dancefloor",
+      "title": "I Bet You Look Good on the Dancefloor",
+      "artist": "Arctic Monkeys",
+      "file": "songs/i-bet-you-look-good-on-the-dancefloor/song.gp",
+      "defaultTrack": 0,
+      "audioOffsetSeconds": 0,
+      "theme": "default",
+      "tags": [],
+      "speedFiles": {
+        "50": "songs/i-bet-you-look-good-on-the-dancefloor/speed-50.mp3",
+        "55": "songs/i-bet-you-look-good-on-the-dancefloor/speed-55.mp3",
+        "60": "songs/i-bet-you-look-good-on-the-dancefloor/speed-60.mp3",
+        "65": "songs/i-bet-you-look-good-on-the-dancefloor/speed-65.mp3",
+        "70": "songs/i-bet-you-look-good-on-the-dancefloor/speed-70.mp3",
+        "75": "songs/i-bet-you-look-good-on-the-dancefloor/speed-75.mp3",
+        "80": "songs/i-bet-you-look-good-on-the-dancefloor/speed-80.mp3",
+        "85": "songs/i-bet-you-look-good-on-the-dancefloor/speed-85.mp3",
+        "90": "songs/i-bet-you-look-good-on-the-dancefloor/speed-90.mp3",
+        "95": "songs/i-bet-you-look-good-on-the-dancefloor/speed-95.mp3"
+      }
+    },
+    {
       "slug": "r-u-mine",
       "title": "R U Mine",
       "artist": "Arctic Monkeys",
