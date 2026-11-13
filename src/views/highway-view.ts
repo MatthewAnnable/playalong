@@ -41,6 +41,18 @@ interface Placed {
   joinPrev: Join;
 }
 
+/**
+ * How much of the theme's lean to use: `?tilt=0` lays the board flat, `?tilt=0.5`
+ * leans it half as much, `?tilt=1` (or nothing) is the theme's full lean. A lean
+ * makes bar lines turn as they cross the screen and far strings scroll slower
+ * than near ones, which can read as warping on a large, fast board.
+ */
+function tiltShare(): number {
+  const raw = new URLSearchParams(location.search).get('tilt');
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isFinite(n) ? Math.min(Math.max(n, 0), 1) : 1;
+}
+
 /** A lane's place on the tilted board: flat x/y in, screen x/y out — `screen = s * flat + d`. */
 interface LaneTransform {
   s: number;
@@ -230,7 +242,7 @@ export class HighwayView {
   // every pill sitting in the same share of its lane on every string.
 
   private refreshBoard(width: number): void {
-    const far = Math.min(Math.max(this.theme.board?.farScale ?? 1, 0.3), 1);
+    const far = Math.min(Math.max(1 - (1 - (this.theme.board?.farScale ?? 1)) * tiltShare(), 0.3), 1);
     const k = 1 / far - 1;
     this.board = {
       top: this.headerHeight(),

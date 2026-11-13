@@ -64,7 +64,14 @@ export function setHighwayObsMode(obs: boolean): void {
 export const SPACING_FULL_UP_TO_BPM = 120;
 
 export function fastSongSpacing(bpm: number): number {
-  return bpm > SPACING_FULL_UP_TO_BPM ? SPACING_FULL_UP_TO_BPM / bpm : 1;
+  return (bpm > SPACING_FULL_UP_TO_BPM ? SPACING_FULL_UP_TO_BPM / bpm : 1) * spacingOverride();
+}
+
+/** `?space=0.8` (0.5 to 1.5) widens or narrows the beats by hand, to try a slower or roomier board. */
+function spacingOverride(): number {
+  const raw = new URLSearchParams(location.search).get('space');
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.max(n, 0.5), 1.5) : 1;
 }
 
 /**
