@@ -7,7 +7,8 @@ import { applyOverrides, loadOverrides, overrideKey, setOverride } from './overr
 import { slugify } from './slug';
 import { buildTimeline, playedIndexAtTick, type PlayedBar } from './timeline';
 import * as clock from './clock';
-import { msAtTick, tempoAnchors, ticksPerSecondAtTick, type TimeAnchor } from './audioTime';
+import { msAtTick, tempoAnchors, tickAtMs, ticksPerSecondAtTick, type TimeAnchor } from './audioTime';
+import { SmoothClock } from './smoothClock';
 import { mainTimeFromSpeedFile, speedFileFor, speedFileTime, type SpeedFileMap } from './speedFiles';
 
 export interface EngineState {
@@ -317,8 +318,18 @@ function updateFromPlayback(): void {
   notify();
 }
 
+const drawClock = new SmoothClock();
+
+/**
+ * Where the highway draws "now", once a frame. While the recording plays it is
+ * read from a steadied audio time straight through the sync points (see
+ * smoothClock.ts); otherwise, as before, from the last position sample.
+ */
 export function getExtrapolatedTick(): number {
-  return clock.getExtrapolatedTick(clockSeconds());
+  const playing = state.isPlaying && !state.countingIn && timeAnchors.length > 0;
+  const seconds = drawClock.read(clockSeconds(), state.speed / 100, playing, performance.now());
+  if (!playing) return clock.getExtrapolatedTick(seconds);
+  return tickAtMs(timeAnchors, seconds * 1000 - syncOffsetMs(), ticksPerQuarter);
 }
 
 /**
@@ -1232,3 +1243,8 @@ export async function replaceMainAudio(file: File): Promise<void> {
   notify();
 }
 
+
+// Dev builds only: lets a console script measure the drawn position frame by frame.
+if (import.meta.env.DEV) {
+  (window as unknown as { __playalong: object }).__playalong = { getExtrapolatedTick, getPositionSnapshot };
+}

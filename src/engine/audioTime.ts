@@ -43,6 +43,26 @@ export function ticksPerSecondAtTick(anchors: TimeAnchor[], tick: number, ticksP
   return (a.bpm / 60) * ticksPerQuarter;
 }
 
+/** The inverse of `msAtTick`: which tick the recording is at, `ms` into it. */
+export function tickAtMs(anchors: TimeAnchor[], ms: number, ticksPerQuarter: number): number {
+  if (anchors.length === 0) return 0;
+  if (ms <= anchors[0].ms) {
+    const a = anchors[0];
+    return a.tick + ((ms - a.ms) / (60000 / a.bpm)) * ticksPerQuarter;
+  }
+  let lo = 0;
+  let hi = anchors.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (anchors[mid].ms <= ms) lo = mid;
+    else hi = mid - 1;
+  }
+  const a = anchors[lo];
+  const b = anchors[lo + 1];
+  if (b && b.ms > a.ms) return a.tick + ((ms - a.ms) / (b.ms - a.ms)) * (b.tick - a.tick);
+  return a.tick + ((ms - a.ms) / (60000 / a.bpm)) * ticksPerQuarter;
+}
+
 /**
  * Where in the recording (ms) a tick lands. Between two anchors it's a
  * straight line from one to the next, so a sync point's stretch is honoured;
