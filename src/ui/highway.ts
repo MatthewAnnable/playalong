@@ -55,16 +55,20 @@ export function setHighwayObsMode(obs: boolean): void {
 }
 
 /**
- * Beats are spaced for songs up to this tempo. Above it a beat gets narrower in
- * proportion, so the board never scrolls faster than it does at 120 bpm: at full
- * spacing a 207 bpm song (I Bet You Look Good on the Dancefloor) ran at twice R U
- * Mine's speed and the numbers blurred. Its eighth notes still come out wider than
- * a slow song's sixteenths.
+ * The fastest the board may scroll at 100% speed, in CSS px a second. A beat's
+ * width comes from the board's size, but never so wide that the board would
+ * scroll faster than this; a big board shows more bars instead of racing.
+ *
+ * Why: on a full-screen board in Safari (60 fps) a fast song blurred. Dancefloor
+ * (207 bpm) ran at ~420 px/s there; Matthew compared versions on 13/11/2026 and
+ * the sharp one was ~330 px/s. Spacing by tempo alone (≤120 bpm, tried first)
+ * wasn't enough, because a bigger board still meant a faster one.
  */
-export const SPACING_FULL_UP_TO_BPM = 120;
+export const MAX_SCROLL_PX_PER_SECOND = 330;
 
-export function fastSongSpacing(bpm: number): number {
-  return (bpm > SPACING_FULL_UP_TO_BPM ? SPACING_FULL_UP_TO_BPM / bpm : 1) * spacingOverride();
+/** Widest a beat may be at this tempo before the board scrolls too fast to read. */
+export function maxPxPerBeat(bpm: number): number {
+  return (MAX_SCROLL_PX_PER_SECOND * 60) / Math.max(bpm, 1);
 }
 
 /** `?space=0.8` (0.5 to 1.5) widens or narrows the beats by hand, to try a slower or roomier board. */
@@ -82,10 +86,11 @@ function spacingOverride(): number {
  */
 function computePxPerTick(): number {
   const { width, height } = canvas.getBoundingClientRect();
-  const pxPerBeat = Math.max(
+  const bySize = Math.max(
     activeTheme.geometry.pxPerBeatRatio * height,
     (activeTheme.geometry.pxPerBeatWidthRatio ?? 0) * width,
-  ) * fastSongSpacing(getSongBpm());
+  );
+  const pxPerBeat = Math.min(bySize, maxPxPerBeat(getSongBpm())) * spacingOverride();
   const ticksPerQuarter = getTicksPerQuarter();
   return ticksPerQuarter > 0 ? pxPerBeat / ticksPerQuarter : 0.1;
 }
@@ -189,4 +194,9 @@ export function initHighway(): void {
 
 export function isHighwayVisible(): boolean {
   return showingHighway;
+}
+
+// Dev builds only: lets a console script read the beat width the board is using.
+if (import.meta.env.DEV) {
+  (window as unknown as { __highwayPxPerTick: () => number }).__highwayPxPerTick = computePxPerTick;
 }
