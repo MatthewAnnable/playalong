@@ -55,9 +55,26 @@ function tiltShare(): number {
 
 /** A lane's place on the tilted board: flat x/y in, screen x/y out — `screen = s * flat + d`. */
 interface LaneTransform {
+  /** The lane's size on the board: pills, strings and numbers are drawn this much smaller or larger. */
   s: number;
+  /** Horizontal scale: `s` when notes converge on the vanishing point, otherwise 1. */
+  sx: number;
   dx: number;
   dy: number;
+}
+
+/**
+ * Whether far strings slide towards the vanishing point as well as shrinking.
+ * Off by default since 16/11/2026: with it on, a power chord's notes were up to
+ * ~90 px apart sideways at the screen's edges, so every chord (and its join line)
+ * swung from leaning one way to the other as it crossed the screen, which read as
+ * warping on a fast song; far strings also scrolled slower than near ones. Off,
+ * the board keeps its depth (far strings smaller and thinner) but chords stand
+ * upright, bar lines are vertical and every string scrolls together.
+ * `?converge=1` brings the old look back to compare.
+ */
+function convergeOn(): boolean {
+  return new URLSearchParams(location.search).get('converge') === '1';
 }
 
 /** Where the ball lands: the first beat of each onset, on its highest string. */
@@ -115,6 +132,10 @@ export class HighwayView {
   private laneCount: number;
   private theme: Theme;
   private pxPerTick: number;
+  /** Far strings slide towards the vanishing point too (see `convergeOn`). */
+  private converge = convergeOn();
+  /** Horizontal correction for text drawn inside the current lane (see `laneText`). */
+  private textXScale = 1;
   private getTick: () => number;
   private onResize?: () => void;
   private notes: NoteEvent[] = [];
@@ -278,31 +299,59 @@ export class HighwayView {
   private project(x: number, flatY: number): { x: number; y: number; s: number } {
     const u = this.uFor(flatY);
     const s = this.sigma(u);
-    return { x: this.board.vx + (x - this.board.vx) * s, y: this.boardY(u), s };
+    const x2 = this.converge ? this.board.vx + (x - this.board.vx) * s : x;
+    return { x: x2, y: this.boardY(u), s };
   }
 
   private laneTransform(laneIndex: number): LaneTransform {
     const c = this.laneCenterY(laneIndex);
     const u = this.uFor(c);
     const s = this.sigma(u);
-    return { s, dx: this.board.vx * (1 - s), dy: this.boardY(u) - c * s };
+    if (this.converge) return { s, sx: s, dx: this.board.vx * (1 - s), dy: this.boardY(u) - c * s };
+    return { s, sx: 1, dx: 0, dy: this.boardY(u) - c * s };
   }
 
   private applyLane(t: LaneTransform, x: number, y: number): { x: number; y: number } {
-    return { x: t.s * x + t.dx, y: t.s * y + t.dy };
+    return { x: t.sx * x + t.dx, y: t.s * y + t.dy };
   }
 
   /** Runs `draw` in a lane's own flat coordinates, scaled and placed on the board. */
   private withLane(laneIndex: number, draw: () => void): void {
     const t = this.laneTransform(laneIndex);
     this.ctx.save();
-    this.ctx.transform(t.s, 0, 0, t.s, t.dx, t.dy);
-    draw();
-    this.ctx.restore();
+    this.ctx.transform(t.sx, 0, 0, t.s, t.dx, t.dy);
+    this.textXScale = t.s / t.sx;
+    try {
+      draw();
+    } finally {
+      this.textXScale = 1;
+      this.ctx.restore();
+    }
+  }
+
+  /**
+   * Text drawn inside a lane at the lane's own size, not squashed: without the
+   * vanishing point a lane is scaled only vertically, so text is narrowed (or
+   * widened) to match. `maxWidth` passed to fitting should be divided by this.
+   */
+  private laneText(text: string, x: number, y: number, stroke = false): void {
+    const ctx = this.ctx;
+    if (this.textXScale === 1) {
+      if (stroke) ctx.strokeText(text, x, y);
+      else ctx.fillText(text, x, y);
+      return;
+    }
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(this.textXScale, 1);
+    if (stroke) ctx.strokeText(text, 0, 0);
+    else ctx.fillText(text, 0, 0);
+    ctx.restore();
   }
 
   /** The flat x-range that lands on screen anywhere on the board — wider than the canvas when the far edge is shrunk. */
   private flatXRange(width: number): [number, number] {
+    if (!this.converge) return [0, width];
     const s = Math.min(this.sigma(0), 1);
     const vx = this.board.vx;
     return [vx - vx / s, vx + (width - vx) / s];
@@ -1089,12 +1138,12 @@ export class HighwayView {
       ctx.restore();
     } else if (item.w >= this.minNumberWidth()) {
       const label = String(note.fret);
-      const size = this.fittedFontSize(label, this.fretSize(), item.w * 0.78, theme.geometry.fretWeight);
+      const size = this.fittedFontSize(label, this.fretSize(), (item.w * 0.78) / this.textXScale, theme.geometry.fretWeight);
       ctx.font = `${theme.geometry.fretWeight} ${size}px Manrope, sans-serif`;
       ctx.fillStyle = ink;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(label, item.x + item.w / 2, item.centerY);
+      this.laneText(label, item.x + item.w / 2, item.centerY);
     }
   }
 
@@ -1145,12 +1194,12 @@ export class HighwayView {
 
     const label = String(item.note.fret);
     const preferred = this.fretSize() * 0.82;
-    const size = this.fittedFontSize(label, preferred, Math.max(half * 2 - preferred, this.px(12)), 700);
+    const size = this.fittedFontSize(label, preferred, Math.max(half * 2 - preferred, this.px(12)) / this.textXScale, 700);
     ctx.font = `700 ${size}px Manrope, sans-serif`;
     ctx.fillStyle = pillTextFor(theme, fingerKey(item.note.finger));
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, cx, item.centerY);
+    this.laneText(label, cx, item.centerY);
   }
 
   // ---- marks above the lane ----------------------------------------
@@ -1202,9 +1251,9 @@ export class HighwayView {
     ctx.lineJoin = 'round';
     ctx.lineWidth = this.px(5);
     ctx.strokeStyle = this.theme.keyline;
-    ctx.strokeText(text, x, y);
+    this.laneText(text, x, y, true);
     ctx.fillStyle = this.theme.techniqueStroke;
-    ctx.fillText(text, x, y);
+    this.laneText(text, x, y);
     ctx.restore();
   }
 
@@ -1403,7 +1452,8 @@ export class HighwayView {
     for (const span of merged) {
       ctx.save();
       const t = this.laneTransform(nearestLane ? span.laneIndex : 0);
-      ctx.transform(t.s, 0, 0, t.s, t.dx, t.dy);
+      ctx.transform(t.sx, 0, 0, t.s, t.dx, t.dy);
+      this.textXScale = t.s / t.sx;
       const y = nearestLane
         ? span.laneIndex * this.laneHeight() + this.headerHeight() - offsetPx
         : headerY;
@@ -1413,11 +1463,12 @@ export class HighwayView {
       ctx.lineJoin = 'round';
       ctx.lineWidth = this.px(5);
       ctx.strokeStyle = theme.keyline;
-      ctx.strokeText('P.M.', span.startX, y);
+      this.laneText('P.M.', span.startX, y, true);
       ctx.fillStyle = theme.palmMuteRing;
-      ctx.fillText('P.M.', span.startX, y);
+      this.laneText('P.M.', span.startX, y);
+      this.textXScale = 1;
 
-      const ruleStart = span.startX + ctx.measureText('P.M.').width + this.px(10);
+      const ruleStart = span.startX + ctx.measureText('P.M.').width * (t.s / t.sx) + this.px(10);
       if (span.endX <= ruleStart) {
         ctx.restore();
         continue;
@@ -1640,7 +1691,7 @@ export class HighwayView {
     for (const item of this.lastLayout) {
       // Back from screen into the lane's own flat coordinates.
       const t = this.laneTransform(item.laneIndex);
-      const fx = (x - t.dx) / t.s;
+      const fx = (x - t.dx) / t.sx;
       const fy = (y - t.dy) / t.s;
       if (fx >= item.x && fx <= item.x + item.w && Math.abs(fy - item.centerY) <= item.h / 2) {
         return item.note;
