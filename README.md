@@ -131,7 +131,7 @@ the top of the stage showing how far it lasts.
 When a song's chords are written into the Guitar Pro file, the highway shows
 each one as a single pill across the strings — "G", "Am7", "Dsus4" — instead
 of a fret number per string. Where the file doesn't name a chord, the app
-works it out from the shape. Chords are drawn in their own colour — a plum that belongs to no finger,
+works it out from the shape. Chords are drawn in their own colour — a deep lilac that belongs to no finger,
 because a chord is every finger at once. **Chord names** in the top rail turns
 it off and on; it starts on for a song with chords written in, and off for a
 riff song.

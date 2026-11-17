@@ -4,19 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Play-Along</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=Manrope:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <meta name="theme-color" content="#141A17" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#E9F0E6" media="(prefers-color-scheme: light)" />
     <link rel="stylesheet" href="/design/matthewannable.css" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <main id="app">
       <header class="app-header" id="top-rail">
-        <span class="eyebrow">Play-Along</span>
+        <div class="rail-brand">
+          <p class="ma-brand">
+            <svg viewBox="-12 -12 779 339" aria-hidden="true">
+              <polyline
+                points="0,158 85,158 159,315 159,0 292,315 425,0 425,315 559,0 693,315 533,158 755,158"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="20"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            Matthew Annable
+          </p>
+          <span class="rail-app">Play-Along</span>
+        </div>
 
         <div class="rail-song">
           <h1 id="song-title"></h1>

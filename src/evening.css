@@ -1,0 +1,197 @@
+/* Matthew Annable — the "Evening" look for the Play-Along.
+ *
+ * The same look as the student portal and the practice apps: the brand green
+ * and amber on a dark forest ground, Manrope for everything, no serif. The
+ * colours are the ones in the master, ~/Claude Cowork/System/design-system/
+ * evening-apps.css — if a colour changes there, change it here too.
+ *
+ * The other apps link a copy of that file. This app can't: its own styles are
+ * written against the older --ma-… names (design/matthewannable.css), so this
+ * file gives those names their Evening values instead. It is imported after
+ * style.css (see main.ts), so it wins.
+ *
+ * Pairing: moss accent, amber action. Amber is also the play line on the
+ * board, and clay (the other candidate) sits too close to the pink that marks
+ * the fourth finger.
+ *
+ * Night is the default. When the device is set to light, the page around the
+ * board takes the day theme (pale sage); the board, the song map and
+ * presentation stay night, because the finger colours are tuned for a dark
+ * board.
+ */
+
+@font-face {
+  font-family: 'Manrope'; font-style: normal; font-weight: 200 800; font-display: swap;
+  src: url("./fonts/manrope-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope'; font-style: normal; font-weight: 200 800; font-display: swap;
+  src: url("./fonts/manrope-latin-ext.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Night. Also pinned onto presentation, so a device set to light still gets
+   a night-time full screen. */
+:root:root,
+#app.presentation {
+  --ma-paper: #141A17;
+  --ma-paper-2: #26332C;
+  --ma-card: #1D2521;
+  --ma-ink-ground: #101512;
+
+  --ma-ink: #EEF0E8;
+  --ma-ink-soft: #A2ADA3;
+  --ma-ink-faint: #A2ADA3;
+  --ma-ink-on-dark: #EEF0E8;
+
+  --ma-line: #2B3630;
+  --ma-line-strong: #3A4A40;
+
+  --ma-green: #9CCB96;          /* moss: the accent */
+  --ma-green-soft: #26332C;
+  --ma-green-line: #4F6B52;
+  --ma-amber: #F7B955;          /* the action colour */
+  --ma-amber-hover: #FFC870;
+  --ma-on-amber: #141A17;
+  --ma-plum: #C2B0F0;           /* lilac: link hover */
+
+  --ma-ok: #9CCB96;      --ma-ok-soft: #22302A;
+  --ma-warn: #F7B955;    --ma-warn-soft: #332E22;
+  --ma-danger: #F0A29A;  --ma-danger-soft: #3A2422;
+
+  --ma-shadow-amber: 0 12px 26px -16px rgba(247, 185, 85, 0.7);
+  --ma-font-display: Manrope, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --ma-font-ui: Manrope, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+
+  --glow: #24332A;
+  /* The page of music in the score view: a sheet of paper on the dark desk. */
+  --sheet: #EEF0E8;
+  --sheet-accent: #3F7A4A;
+}
+:root { color-scheme: dark; }
+
+/* Day: the same page with the lights on. */
+@media (prefers-color-scheme: light) {
+  :root:root {
+    color-scheme: light;
+
+    --ma-paper: #E9F0E6;
+    --ma-paper-2: #DDE7D9;
+    --ma-card: #F9FCF7;
+
+    --ma-ink: #18241D;
+    --ma-ink-soft: #566A5C;
+
+    --ma-line: #D6E0D2;
+    --ma-line-strong: #C9D6C5;
+
+    --ma-green: #3F7A4A;
+    --ma-green-soft: #DDE7D9;
+    --ma-green-line: #A9C4A6;
+    --ma-amber: #F2A93B;
+    --ma-amber-hover: #F7B955;
+    --ma-on-amber: #18241D;
+    --ma-plum: #6B5BB5;
+
+    --ma-ok: #3F7A4A;      --ma-ok-soft: #D9EAD5;
+    --ma-warn: #8A5A14;    --ma-warn-soft: #F3EAD2;
+    --ma-danger: #9B3232;  --ma-danger-soft: #F4DFDA;
+
+    --ma-shadow-amber: 0 12px 26px -16px rgba(242, 169, 59, 0.9);
+
+    --glow: #D9EAD5;
+    --sheet: #F9FCF7;
+  }
+}
+
+/* OBS draws the page over the camera, so it keeps no ground at all. */
+html:not(:has(#app.obs)) { background: var(--ma-paper); }
+body:not(:has(#app.obs)) {
+  background: radial-gradient(120% 520px at 85% 0%, var(--glow) 0%, var(--ma-paper) 70%) no-repeat, var(--ma-paper);
+  color: var(--ma-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+:root h1, :root h2, :root h3 { font-weight: 700; letter-spacing: -0.015em; }
+*:focus-visible { outline-color: var(--ma-amber); }
+
+/* The name and zigzag, as on the portal and the other apps, with the app's
+   own name under it. */
+.rail-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.ma-brand {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ma-ink-soft);
+  white-space: nowrap;
+}
+.ma-brand svg { width: 34px; height: 15px; flex: none; color: var(--ma-green); }
+.rail-app {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ma-ink);
+  white-space: nowrap;
+}
+
+.rail-song h1 { font-weight: 800; letter-spacing: -0.03em; }
+#drop-zone-text { font-weight: 700; letter-spacing: -0.02em; }
+.recent-songs h2 { font-weight: 700; }
+.recent-songs-list button { font-weight: 600; }
+.modal-title { font-weight: 700; }
+.highway-title { font-weight: 700; letter-spacing: -0.015em; }
+
+/* Dark text on the amber buttons, whichever theme the page is in. */
+.btn-amber, .btn-amber:hover, .btn-fullscreen { color: var(--ma-on-amber); }
+
+/* The view switch: the selected view is filled with the accent, as the
+   selected tab is in the other apps. */
+.segmented-option.is-active {
+  background: var(--ma-green);
+  border-color: var(--ma-green);
+  color: var(--ma-paper);
+}
+
+/* The board is a card on the page: a hairline round it, the portal's radius. */
+.highway-surface {
+  border: 1px solid #2B3630;
+  border-radius: 20px;
+}
+#app.presentation .highway-surface, #app.obs .highway-surface { border: none; border-radius: 0; }
+.song-video { border-radius: 20px; }
+#app.presentation .song-video { border-radius: 0; }
+.scrubber-wrap { background: #101512; border: 1px solid #2B3630; border-radius: 10px; }
+.transport-dock { border-top-color: var(--ma-line); }
+
+/* The score view outside presentation is a page of music: dark ink on a
+   light sheet in both themes, like paper on a desk at night. */
+#app:not(.presentation) .alphatab-surface {
+  --ma-green: var(--sheet-accent);
+  background: var(--sheet);
+  border-radius: 20px;
+  padding: 12px;
+}
+#app:not(.presentation) .alphatab-surface .at-cursor-bar { background: rgba(63, 122, 74, 0.14); }
+
+/* The top rail was a fixed 80px with everything on one line, which cut the
+   song's name down to "R U …" even on a wide screen. It now grows instead:
+   the name keeps its room and whatever doesn't fit drops to a second line. */
+@media (min-width: 761px) {
+  .app-header {
+    height: auto;
+    min-height: 80px;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    padding: 12px 0 8px;
+  }
+  .rail-song { flex: 1 1 200px; }
+  /* First line: the name, with the page's actions at the right. Second
+     line: the controls for what's on the board. */
+  .rail-actions { order: 2; flex-wrap: nowrap; }
+  .rail-controls { order: 3; flex-basis: 100%; }
+}

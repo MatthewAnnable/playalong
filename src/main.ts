@@ -1,4 +1,6 @@
 import './style.css';
+// The Evening look (night and day). After style.css, so it wins.
+import './evening.css';
 import { isGuitarProFile, readFileAsArrayBuffer } from './engine/loader';
 import {
   getScoreMeta,
