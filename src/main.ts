@@ -9,6 +9,7 @@ import {
   setSongOffsets,
   setSpeedFiles,
   replaceMainAudio,
+  seekToBar,
   setGuitarOn,
   setLoop,
   setNoGuitarTrack,
@@ -232,6 +233,9 @@ function applyLinkParams(params: LinkParams): void {
     const from = Math.min(Math.max(params.from ?? 1, 1), totalBars);
     const to = Math.min(Math.max(params.to ?? totalBars, 1), totalBars);
     setLoop(from, to, true);
+    // Start on the loop, not at bar 1: otherwise the student has to play
+    // through everything before it to reach the bars they were sent.
+    seekToBar(Math.min(from, to));
   }
   if (params.view) setHighwayView(params.view === 'highway');
   if (params.guitar === 'off') setGuitarOn(false);
@@ -242,6 +246,17 @@ function showPendingSongPrompt(params: LinkParams): void {
   pendingLinkParams = params;
   const name = params.song ? params.song.replace(/-/g, ' ') : 'the song';
   pendingSongNote.textContent = `Drop “${name}” here to continue`;
+  pendingSongNote.hidden = false;
+}
+
+/**
+ * While a link's song is being fetched from the library the same line says
+ * so. It used to say "Drop the song here" from the start, which on a slow
+ * connection told a student they needed a file they don't have.
+ */
+function showSongLoadingNote(params: LinkParams): void {
+  const name = params.song ? params.song.replace(/-/g, ' ') : 'the song';
+  pendingSongNote.textContent = `Loading “${name}”… this can take a moment`;
   pendingSongNote.hidden = false;
 }
 
@@ -341,19 +356,29 @@ async function openManifestSong(manifestUrl: string, song: ManifestSong): Promis
 }
 
 async function loadFromManifest(manifestUrl: string, params: LinkParams): Promise<void> {
+  const wantsSong = !!params.song && mode !== 'obs';
+  if (wantsSong) showSongLoadingNote(params);
   const manifest = await fetchManifest(manifestUrl);
-  if (!manifest) return;
-  renderLibrary(manifest.songs, manifestUrl);
+  if (manifest) renderLibrary(manifest.songs, manifestUrl);
   if (!params.song) return;
-  const song = manifest.songs.find((entry) => entry.slug === params.song);
-  if (!song) return;
+  const song = manifest?.songs.find((entry) => entry.slug === params.song);
+  if (!song) {
+    // Not a library song (or the library couldn't be reached): it's one the
+    // student has as a file, so now is the time to ask for it.
+    if (wantsSong) {
+      showPendingSongPrompt(params);
+      setStatus(`“${params.song.replace(/-/g, ' ')}” isn't in the library. If you have the file, drop it above, or pick a song from the list.`, true);
+    }
+    return;
+  }
   try {
     await openManifestSong(manifestUrl, song);
     clearPendingSongPrompt();
     applyLinkParams(params);
     setStatus(`Loaded "${song.title}" from the library.`);
   } catch (err) {
-    setStatus((err as Error).message, true);
+    clearPendingSongPrompt();
+    setStatus(`Couldn't load "${song.title}". Check your internet connection and reload the page. (${(err as Error).message})`, true);
   }
 }
 
@@ -383,7 +408,6 @@ function renderLibrary(songs: ManifestSong[], manifestUrl: string): void {
 const manifestUrl = resolveManifestUrl(linkParams.manifest);
 if (manifestUrl) {
   void loadFromManifest(manifestUrl, linkParams);
-  if (linkParams.song) showPendingSongPrompt(linkParams);
 } else if (linkParams.song && mode !== 'obs') {
   showPendingSongPrompt(linkParams);
 }

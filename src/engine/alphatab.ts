@@ -312,10 +312,30 @@ function updateFromPlayback(): void {
   // with a count-in. state.countingIn is the re-entrancy guard: it's set
   // synchronously as the first step of the restart, before anything async, so
   // the next 20ms tick of this same loop sees it and skips.
-  if (state.loopEnabled && state.isPlaying && !state.countingIn && state.currentBar > state.loopEndBar) {
-    void restartLoopWithCountIn();
+  if (state.isPlaying && !state.countingIn) {
+    lastPlayingTick = tick;
+    if (state.loopEnabled && (state.currentBar > state.loopEndBar || songIsEnding(tick, ticksPerSecond))) {
+      void restartLoopWithCountIn();
+    }
   }
   notify();
+}
+
+/** The last tick seen while the song was playing: where a loop was when the song ran out. */
+let lastPlayingTick = 0;
+/** How close to the song's end (seconds of recording) a loop turns round, so it gets there before alphaTab stops. */
+const SONG_END_MARGIN_SEC = 0.15;
+
+/**
+ * A loop whose last bar is the song's last bar has no "bar after" to cross
+ * into: the song just ended, alphaTab stopped and went back to bar 1, and the
+ * loop never came round. So the end of the song counts as the end of the loop.
+ */
+function songIsEnding(tick: number, ticksPerSecond: number): boolean {
+  const last = timeline[timeline.length - 1];
+  if (last && tick >= last.end - ticksPerSecond * SONG_END_MARGIN_SEC) return true;
+  const duration = mainAudio?.duration ?? NaN;
+  return Number.isFinite(duration) && duration > 0 && duration - clockSeconds() < SONG_END_MARGIN_SEC;
 }
 
 const drawClock = new SmoothClock();
@@ -536,6 +556,18 @@ export async function openScore(buffer: ArrayBuffer): Promise<void> {
   api.playerStateChanged.on((e) => {
     state.isPlaying = e.state === synth.PlayerState.Playing;
     notify();
+  });
+
+  // The safety net for songIsEnding: if the song still ran out with a loop on
+  // (a tab in the background checks the position far less often), go round
+  // from here. alphaTab stops and rewinds straight after this event, so wait
+  // for that before seeking.
+  api.playerFinished.on(() => {
+    if (!state.loopEnabled || state.countingIn) return;
+    const endedAt = lastPlayingTick;
+    window.setTimeout(() => {
+      if (state.loopEnabled && !state.countingIn) void restartLoopWithCountIn(endedAt);
+    }, 0);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -878,12 +910,12 @@ export async function togglePlay(): Promise<void> {
  * as the initial play, so a loop reads as a bar of count-in followed by the
  * riff, every time round — something you can actually play along with.
  */
-async function restartLoopWithCountIn(): Promise<void> {
+async function restartLoopWithCountIn(fromTick?: number): Promise<void> {
   if (!api) return;
   api.pause();
   // Back to the pass of the start bar that was just played — inside a
   // repeat, the first pass through it could be a long way back.
-  const startTick = barToTick(state.loopStartBar, api.player?.tickPosition ?? 0);
+  const startTick = barToTick(state.loopStartBar, fromTick ?? api.player?.tickPosition ?? 0);
   // Seek *before* counting in, so the count-in shows the riff that's about
   // to be played rather than sitting on the end of the pass that just
   // finished — and the audio's re-decode for the seek runs under the clicks
