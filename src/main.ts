@@ -385,7 +385,9 @@ async function openManifestSong(manifestUrl: string, song: ManifestSong): Promis
   if (song.videoFile) {
     videos.push({ url: resolveSongUrl(manifestUrl, { ...song, file: song.videoFile }), track: undefined, offsetSeconds: song.videoOffsetSeconds, focusY: song.videoFocusY });
   }
-  if (videos.length) setSongVideos(videos);
+  // `?video=off` leaves the video out, to compare the board without it.
+  const videoOff = new URLSearchParams(location.search).get('video') === 'off';
+  if (videos.length && !videoOff) setSongVideos(videos);
   else clearSongVideo();
   if (song.noGuitarFile) {
     const noGuitarBuffer = await fetchSongBuffer(resolveSongUrl(manifestUrl, { ...song, file: song.noGuitarFile }));

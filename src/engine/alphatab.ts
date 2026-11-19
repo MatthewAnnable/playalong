@@ -355,9 +355,21 @@ const drawClock = new SmoothClock();
  * read from a steadied audio time straight through the sync points (see
  * smoothClock.ts); otherwise, as before, from the last position sample.
  */
+/**
+ * The time of the frame being drawn, not the moment this code happens to run.
+ * Every frame reaches the screen on the display's beat, but the drawing code
+ * starts a little earlier or later each time; stepping the board by the
+ * latter made its steps uneven (about ±13% at 120fps), which on a moving
+ * board reads as blur. Falls back to the clock where there is no timeline.
+ */
+function frameNowMs(): number {
+  const t = document.timeline?.currentTime;
+  return typeof t === 'number' ? t : performance.now();
+}
+
 export function getExtrapolatedTick(): number {
   const playing = state.isPlaying && !state.countingIn && timeAnchors.length > 0;
-  const seconds = drawClock.read(clockSeconds(), state.speed / 100, playing, performance.now());
+  const seconds = drawClock.read(clockSeconds(), state.speed / 100, playing, frameNowMs());
   if (!playing) return clock.getExtrapolatedTick(seconds);
   return tickAtMs(timeAnchors, seconds * 1000 - syncOffsetMs(), ticksPerQuarter);
 }
