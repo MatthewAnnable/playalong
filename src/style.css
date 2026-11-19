@@ -1,7 +1,14 @@
 #app {
+  /* Room kept clear at the foot of the page for the transport dock, which
+     floats over it. Also where brief messages appear, just above the dock. */
+  --dock-space: 24px;
   max-width: var(--ma-container);
   margin: 0 auto;
-  padding: 0 var(--ma-section-x) 116px;
+  padding: 0 var(--ma-section-x) var(--dock-space);
+}
+
+#app.has-song {
+  --dock-space: 112px;
 }
 
 .eyebrow {
@@ -65,99 +72,6 @@
 #app:not(.has-song) .rail-song,
 #app:not(.has-song) .rail-controls,
 #app:not(.has-song) .rail-actions {
-  display: none;
-}
-
-/* Drop zone (empty state only) */
-
-.drop-zone {
-  margin-top: var(--ma-gap);
-  min-height: 352px;
-  border-radius: var(--ma-radius-card);
-  background: var(--ma-paper-2);
-  border: 2px dashed var(--ma-line-strong);
-  text-align: center;
-  color: var(--ma-ink-soft);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--ma-card-pad);
-}
-
-.drop-zone.is-dragover {
-  border-color: var(--ma-green);
-  color: var(--ma-ink);
-}
-
-#drop-zone-text {
-  font-family: var(--ma-font-display);
-  font-size: 38px;
-  line-height: 1.2;
-  color: var(--ma-ink);
-  max-width: 20ch;
-  margin: 0 auto;
-}
-
-.drop-zone code {
-  font-family: var(--ma-font-mono);
-  font-size: 14px;
-  background: var(--ma-paper);
-  padding: 3px 7px;
-  border-radius: 6px;
-}
-
-/* Recent songs / library */
-
-.recent-songs {
-  margin-top: var(--ma-gap);
-}
-
-.recent-songs h2 {
-  font-family: var(--ma-font-display);
-  font-weight: 500;
-  font-size: var(--ma-size-h3);
-  margin: 0 0 12px;
-}
-
-.recent-songs-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.recent-songs-list li {
-  border-bottom: 1px solid var(--ma-line);
-}
-
-.recent-songs-list li:last-child {
-  border-bottom: none;
-}
-
-.recent-songs-list button {
-  width: 100%;
-  min-height: 72px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-  font-family: var(--ma-font-display);
-  font-size: 21px;
-  color: var(--ma-ink);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.recent-songs-list .recent-song-artist {
-  font-family: var(--ma-font-ui);
-  font-size: 13px;
-  color: var(--ma-ink-soft);
-}
-
-#app.has-song .drop-zone,
-#app.has-song .recent-songs,
-#app.has-song #library {
   display: none;
 }
 
@@ -310,8 +224,9 @@
 
 /* Score / alphaTab surface */
 
+/* The status line used to take a row here; it floats now (see .status). */
 .player {
-  padding-top: var(--ma-gap);
+  padding-top: 0;
 }
 
 .alphatab-surface {
@@ -332,16 +247,6 @@
   fill: var(--ma-green) !important;
 }
 
-.status {
-  color: var(--ma-ink-soft);
-  font-size: var(--ma-size-small);
-  min-height: 1.5em;
-  margin-top: 8px;
-}
-
-.status.is-error {
-  color: var(--ma-danger);
-}
 
 /* Highway view */
 
@@ -356,13 +261,15 @@
    carries the bar numbers and the finger hand. */
 .highway-header {
   position: relative;
-  height: 56px;
+  /* Grows to a second line rather than spilling onto the board when the
+     name and the bar/tempo/track line don't fit side by side. */
+  min-height: 56px;
   z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: var(--ma-gap);
-  padding: 0 24px;
+  gap: 4px var(--ma-gap);
+  padding: 6px 24px;
   color: var(--stage-text-color, #FBF8F3);
   flex-wrap: wrap;
   pointer-events: none;
@@ -429,7 +336,7 @@
   right: 0;
   top: auto;
   bottom: calc(var(--board-fraction, 0.5) * 100vh);
-  height: 64px;
+  min-height: 64px;
 }
 
 /* The video of the song being played (see video.ts). In the normal view it
@@ -577,10 +484,22 @@
   display: none;
 }
 
-/* Bar counter, speed and loop. On a wide screen the group isn't there as far
-   as layout goes; on a narrow one it becomes the dock's second row. */
+/* Play and the song map on the left, taking whatever room is spare; bar
+   counter, speed, loop and count-in on the right. Where the two don't fit
+   on one line, the song map gets a row of its own (see the media queries). */
+.dock-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .dock-group {
-  display: contents;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
 }
 
 .time {
@@ -900,11 +819,6 @@
   cursor: pointer;
 }
 
-.pending-note {
-  margin: 8px 0 0;
-  color: var(--ma-green);
-  font-weight: 600;
-}
 
 /* Tap-to-start overlay for links that open with autoplay */
 
@@ -940,8 +854,7 @@
 /* Presentation mode */
 
 #app.presentation .app-header,
-#app.presentation .drop-zone,
-#app.presentation .recent-songs,
+#app.presentation .home,
 #app.presentation .status {
   display: none;
 }
@@ -1079,8 +992,7 @@
 
 #app.obs .transport-dock,
 #app.obs .app-header,
-#app.obs .drop-zone,
-#app.obs .recent-songs,
+#app.obs .home,
 #app.obs .status {
   display: none;
 }
@@ -1105,60 +1017,668 @@ body:has(#app.obs) {
   background: transparent;
 }
 
-/* Narrow screens: the dock is two rows — play and the scrubber, then the bar
-   counter, speed and loop — instead of one row that ran off the right edge
-   (it needed about 900px). */
-@media (max-width: 1000px) {
-  #app {
-    padding-bottom: 176px;
+
+
+/* ---- The front page: the song list first ------------------------------ */
+
+#app.has-song .home {
+  display: none;
+}
+
+.home {
+  padding: 4px 0 32px;
+}
+
+.home-heading {
+  font-family: var(--ma-font-ui);
+  font-size: var(--ma-size-h3);
+  margin: 8px 0 14px;
+}
+
+.home-heading-small {
+  font-size: 17px;
+  color: var(--ma-ink-soft);
+  margin-top: 0;
+}
+
+/* A practice link that is still loading, or whose song isn't in the list. */
+.pending-note {
+  margin: 8px 0 20px;
+  padding: 14px 18px;
+  border-radius: var(--ma-radius-card);
+  background: var(--ma-green-soft);
+  border: 1px solid var(--ma-green-line);
+  color: var(--ma-ink);
+  font-weight: 600;
+}
+
+.library-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.song-tile {
+  width: 100%;
+  height: 100%;
+  min-height: 116px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 18px 20px;
+  text-align: left;
+  font-family: var(--ma-font-ui);
+  color: var(--ma-ink);
+  background: var(--ma-card);
+  border: 1px solid var(--ma-line);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.song-tile:hover {
+  border-color: var(--ma-green-line);
+}
+
+.song-tile-title {
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.song-tile-artist {
+  font-size: var(--ma-size-fine);
+  font-weight: 500;
+  color: var(--ma-ink-soft);
+}
+
+.song-tile-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.badge,
+.dock-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--ma-font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 10px;
+  border-radius: var(--ma-radius-pill);
+  background: var(--ma-green-soft);
+  border: 1px solid var(--ma-green-line);
+  color: var(--ma-green);
+  white-space: nowrap;
+}
+
+.dock-badge[hidden] {
+  display: none;
+}
+
+.speed-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Your own file: a small secondary control under the list. */
+.own-file {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ma-line);
+}
+
+.own-file-hint {
+  margin: 0;
+  font-size: var(--ma-size-fine);
+  color: var(--ma-ink-soft);
+}
+
+.own-file code {
+  font-family: var(--ma-font-mono);
+  font-size: 13px;
+  background: var(--ma-paper-2);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.recent-songs {
+  margin-top: 28px;
+}
+
+.recent-songs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recent-songs-list li {
+  border-bottom: 1px solid var(--ma-line);
+}
+
+.recent-songs-list li:last-child {
+  border-bottom: none;
+}
+
+.recent-songs-list button {
+  width: 100%;
+  min-height: var(--ma-tap);
+  padding: 8px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-align: left;
+  font-family: var(--ma-font-ui);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--ma-ink);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.recent-songs-list .recent-song-artist {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ma-ink-soft);
+}
+
+/* A file dragged over the page: anywhere will take it. */
+#app.is-dragover::after {
+  content: 'Drop the file to open it';
+  position: fixed;
+  inset: 12px;
+  z-index: 2500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--ma-green);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--ma-paper) 82%, transparent);
+  font-family: var(--ma-font-ui);
+  font-weight: 800;
+  font-size: 26px;
+  color: var(--ma-green);
+  pointer-events: none;
+}
+
+/* ---- Top rail: the "More" menu ------------------------------------------ */
+
+.rail-menu {
+  position: relative;
+}
+
+.menu-button {
+  min-height: var(--ma-tap);
+  min-width: var(--ma-tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: var(--ma-radius-pill);
+  border: 1px solid var(--ma-line-strong);
+  background: var(--ma-card);
+  color: var(--ma-ink);
+  font-family: var(--ma-font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.menu-button svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.menu-button:hover,
+.menu-button[aria-expanded='true'] {
+  border-color: var(--ma-green);
+  color: var(--ma-green);
+}
+
+.menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 1000;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--ma-card);
+  border: 1px solid var(--ma-line-strong);
+  border-radius: var(--ma-radius-card);
+  box-shadow: 0 24px 48px -20px rgba(0, 0, 0, 0.6);
+}
+
+.menu-panel[hidden],
+.menu-item[hidden] {
+  display: none;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--ma-tap);
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  font-family: var(--ma-font-ui);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ma-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: var(--ma-paper-2);
+}
+
+.menu-check input {
+  accent-color: var(--ma-green);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.menu-rule {
+  border: none;
+  border-top: 1px solid var(--ma-line);
+  margin: 6px 4px;
+}
+
+/* ---- Status: a brief message just above the dock ------------------------ */
+
+.status {
+  position: fixed;
+  left: 50%;
+  bottom: var(--dock-space);
+  z-index: 950;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 32px));
+  margin: 0;
+  padding: 10px 18px;
+  border-radius: 14px;
+  background: var(--ma-card);
+  border: 1px solid var(--ma-line-strong);
+  box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.6);
+  color: var(--ma-ink);
+  font-size: var(--ma-size-fine);
+  font-weight: 600;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.status.is-shown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.status.is-error {
+  color: var(--ma-danger);
+  border-color: var(--ma-danger);
+}
+
+/* An error stays until the next message; a tap puts it away sooner. */
+.status.is-shown.is-error {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ---- Transport dock: an Evening card ------------------------------------ */
+
+#app:not(.presentation) .transport-dock {
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  max-width: 1400px;
+  margin: 0 auto;
+  height: auto;
+  min-height: 80px;
+  padding: 10px 18px;
+  gap: 16px;
+  border: 1px solid var(--ma-line-strong);
+  border-radius: 20px;
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.7);
+}
+
+/* The loop chip filled with the accent while a loop is on. */
+#app .loop-chip.is-on {
+  background: var(--ma-green);
+  border-color: var(--ma-green);
+}
+
+#app .loop-chip.is-on .loop-chip-label,
+#app .loop-chip.is-on .loop-bar-input {
+  color: var(--ma-paper);
+}
+
+#app .loop-chip.is-on .loop-chip-clear {
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--ma-paper);
+}
+
+/* Count-in on/off. */
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ma-tap);
+  font-family: var(--ma-font-ui);
+  font-weight: 600;
+  font-size: var(--ma-size-fine);
+  color: var(--ma-ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.switch-track {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border-radius: var(--ma-radius-pill);
+  background: var(--ma-paper-2);
+  border: 1px solid var(--ma-line-strong);
+  transition: background-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ma-ink-soft);
+  transition: transform 0.15s ease;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--ma-green);
+  border-color: var(--ma-green);
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(16px);
+  background: var(--ma-paper);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--ma-amber);
+  outline-offset: 2px;
+}
+
+#app.presentation .switch {
+  color: #a8a29a;
+}
+
+/* ---- Narrower screens --------------------------------------------------- */
+
+/* Below this the dock's two halves no longer share a line without squeezing
+   the song map to a thumbnail, so the song map gets a row of its own. */
+@media (max-width: 1180px) {
+  #app.has-song {
+    --dock-space: 164px;
   }
 
   .transport-dock,
   #app.presentation .transport-dock {
     height: auto;
     flex-wrap: wrap;
-    row-gap: 10px;
-    column-gap: 14px;
-    padding: 12px 16px;
+    row-gap: 8px;
   }
 
   #app.presentation .transport-dock {
     border-radius: 28px;
-    bottom: 16px;
-    max-width: calc(100vw - 24px);
+    padding: 12px 18px;
+  }
+
+  .dock-main {
+    flex-basis: 100%;
   }
 
   .dock-group {
-    display: flex;
-    flex-basis: 100%;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    row-gap: 4px;
   }
 
   .scrubber-wrap {
-    min-width: 60px;
+    min-width: 0;
   }
 }
 
-
-@media (max-width: 480px) {
-  .transport-dock,
-  #app.presentation .transport-dock {
-    column-gap: 10px;
-    padding: 10px 12px;
+/* Phones: the rail stacks — song and the More menu, then the view switch and
+   the track, then Guitar, Presentation and Practice link — and the dock
+   tightens up, so the board and Play are both on screen. */
+@media (max-width: 760px) {
+  #app.has-song {
+    --dock-space: 136px;
   }
 
-  .dock-group {
+  .app-header {
+    height: auto;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 2px;
+    column-gap: 10px;
+    padding: 10px 0 8px;
+    margin-bottom: 8px;
+  }
+
+  /* With a song open the brand gives its row to the song's name. */
+  #app.has-song .rail-brand {
+    display: none;
+  }
+
+  /* The rail's pieces become one row-wrapping list, ordered and broken into
+     three lines: song + More / view + track / Guitar + the two actions. */
+  .rail-actions,
+  .rail-controls {
+    display: contents;
+  }
+
+  .app-header::before,
+  .app-header::after {
+    content: '';
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .rail-song {
+    order: 1;
+    flex: 1 1 0;
+  }
+
+  .rail-song h1 {
+    font-size: 21px;
+  }
+
+  .rail-menu {
+    order: 2;
+  }
+
+  .app-header::before {
+    order: 3;
+  }
+
+  .view-switch,
+  #track-select {
+    order: 4;
+  }
+
+  .app-header::after {
+    order: 5;
+  }
+
+  #track-select {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+  }
+
+  #guitar-toggle-row,
+  #presentation-button,
+  #copy-link-button {
+    order: 6;
+  }
+
+  #guitar-toggle-row {
+    margin-right: auto;
+  }
+
+  #presentation-button,
+  #copy-link-button {
+    padding: 0 6px;
+    font-size: 13px;
+  }
+
+  .menu-button-label {
+    display: none;
+  }
+
+  .player {
+    padding-top: 0;
+  }
+
+  /* The video and the board share the space between the rail and the dock. */
+  .song-video {
+    height: 22vh;
+    height: 22dvh;
+    min-height: 120px;
+    margin-bottom: 8px;
+  }
+
+  #highway-canvas,
+  #app.has-video:not(.presentation):has(#highway:not([hidden])) #highway-canvas {
+    height: calc(100vh - 370px);
+    height: calc(100dvh - 370px);
+    min-height: 220px;
+  }
+
+  #app.has-video:not(.presentation):has(#highway:not([hidden])) #highway-canvas {
+    height: calc(78vh - 370px);
+    height: calc(78dvh - 370px);
+    min-height: 200px;
+  }
+
+  /* One line above the board: bar, tempo and Full screen. The song's name is
+     already in the rail and the track in its select. */
+  #app:not(.presentation) .highway-header {
+    min-height: 48px;
+    padding: 0 6px 0 14px;
+    flex-wrap: nowrap;
+  }
+
+  #app:not(.presentation) .highway-heading,
+  #app:not(.presentation) #highway-track-name {
+    display: none;
+  }
+
+  #app:not(.presentation) .highway-meta {
+    flex: 1;
+    justify-content: space-between;
+    gap: 12px;
+    white-space: nowrap;
+  }
+
+  /* Presentation keeps the song's name above the board, on one line. */
+  #app.presentation .highway-header {
+    flex-wrap: nowrap;
+    padding: 0 14px;
+    white-space: nowrap;
+  }
+
+  #app.presentation .highway-heading {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #app.presentation .highway-artist,
+  #app.presentation #highway-track-name {
+    display: none;
+  }
+
+  .btn-fullscreen {
+    font-size: 14px;
+    padding: 0 14px 0 12px;
     gap: 8px;
   }
 
+  #app:not(.presentation) .transport-dock {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    padding: 8px 12px;
+    gap: 6px 10px;
+  }
+
+  .dock-main {
+    gap: 10px;
+  }
+
+  .btn-amber#play-button {
+    min-width: 96px;
+    min-height: 48px;
+    padding: 0 18px;
+  }
+
+  .scrubber-wrap {
+    height: 48px;
+  }
+
+  .scrubber::-webkit-slider-thumb {
+    height: 48px;
+  }
+
+  .dock-group {
+    gap: 4px 10px;
+    justify-content: space-between;
+  }
+
   .stepper-btn {
-    width: 32px;
+    width: 34px;
   }
 
   .stepper-value {
-    min-width: 48px;
+    min-width: 46px;
   }
 
   .loop-chip {
@@ -1170,53 +1690,77 @@ body:has(#app.obs) {
   }
 }
 
-/* Phones: the rail was one fixed 80px row, which squashed the song title to
-   "R…" and pushed the action links 40px past the screen edge. Here it stacks —
-   song, then view/track/options, then the action links — and every row wraps
-   inside the screen. */
-@media (max-width: 760px) {
-  .app-header {
-    height: auto;
-    flex-wrap: wrap;
-    align-items: center;
-    row-gap: 6px;
-    column-gap: 12px;
-    padding: 12px 0 10px;
+/* The smallest phones: the times go (the song map shows where you are) and
+   the bar counter leaves the dock (it's above the board). */
+@media (max-width: 480px) {
+  .dock-main .time {
+    display: none;
   }
 
-  .rail-song {
-    flex: 1 1 0;
+  #app:has(#highway:not([hidden])) .dock-group .bar-counter {
+    display: none;
   }
 
-  .rail-song h1 {
-    font-size: 22px;
+  /* Count-in's label sits over its switch, so speed, loop and count-in
+     share one row. */
+  .switch {
+    flex-direction: column;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
-  .rail-controls {
-    flex-basis: 100%;
-    gap: 4px 14px;
+  .switch-label {
+    order: -1;
   }
 
-  #track-select {
-    max-width: 100%;
-    min-width: 0;
+  .stepper-btn {
+    width: 32px;
   }
 
-  .rail-actions {
-    flex-basis: 100%;
-    margin-left: 0;
-    justify-content: space-between;
+  .dock-group {
     gap: 4px;
   }
 
-  .btn-text-green {
-    padding: 0 6px;
-    font-size: 13px;
+  .loop-chip {
+    gap: 4px;
+    padding: 0 4px 0 10px;
+  }
+
+  .loop-bar-input {
+    width: 1.8em;
+  }
+
+  /* "Slowed recording" tucks under the speed, inside the stepper. */
+  .speed-wrap .dock-badge {
+    position: absolute;
+    left: 50%;
+    bottom: 3px;
+    transform: translateX(-50%);
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+  }
+
+  .speed-wrap:has(.dock-badge:not([hidden])) .stepper-value {
+    padding-bottom: 10px;
   }
 }
 
-/* Keyboard shortcuts mean nothing on a touch-only screen, and dropping the
-   button lets the other three actions sit on one line. */
+
+/* Nothing to drag a file from on a touch screen. */
+@media (hover: none) and (pointer: coarse) {
+  .drop-hint {
+    display: none;
+  }
+}
+
+/* Keyboard shortcuts mean nothing on a touch-only phone. */
 @media (max-width: 760px) and (hover: none) and (pointer: coarse) {
   #shortcuts-button {
     display: none;

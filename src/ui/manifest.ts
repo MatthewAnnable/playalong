@@ -90,3 +90,21 @@ export async function fetchSongBuffer(url: string): Promise<ArrayBuffer> {
   if (!response.ok) throw new Error(`Couldn't download the song (${response.status}).`);
   return response.arrayBuffer();
 }
+
+export interface SongFeatures {
+  /** A video of the song being played. */
+  video: boolean;
+  /** Pre-rendered slowed recordings for practice speeds. */
+  slowed: boolean;
+  /** A backing track with the guitar taken out. */
+  noGuitar: boolean;
+}
+
+/** What a library song comes with, for the badges on its tile. */
+export function songFeatures(song: ManifestSong): SongFeatures {
+  return {
+    video: !!song.videoFile || (song.videos?.length ?? 0) > 0,
+    slowed: Object.keys(song.speedFiles ?? {}).length > 0,
+    noGuitar: !!song.noGuitarFile,
+  };
+}

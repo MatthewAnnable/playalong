@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSongUrl, type ManifestSong } from './manifest';
+import { resolveSongUrl, songFeatures, type ManifestSong } from './manifest';
 
 const PAGE = 'https://portal.example/playalong/?song=freedom';
 
@@ -45,5 +45,25 @@ describe('resolveSongUrl', () => {
     expect(resolveSongUrl('songs/index.json', song('songs/freedom/song.gp'), PAGE)).toBe(
       'https://portal.example/playalong/songs/freedom/song.gp',
     );
+  });
+});
+
+describe('songFeatures', () => {
+  const base: ManifestSong = { slug: 'x', title: 'X', artist: 'Y', file: 'songs/x/song.gp' };
+
+  it('has nothing for a bare song', () => {
+    expect(songFeatures(base)).toEqual({ video: false, slowed: false, noGuitar: false });
+  });
+
+  it('spots a single video or per-track videos', () => {
+    expect(songFeatures({ ...base, videoFile: 'v.mp4' }).video).toBe(true);
+    expect(songFeatures({ ...base, videos: [{ file: 'solo.mp4', track: 1 }] }).video).toBe(true);
+    expect(songFeatures({ ...base, videos: [] }).video).toBe(false);
+  });
+
+  it('spots slowed recordings and a no-guitar track', () => {
+    expect(songFeatures({ ...base, speedFiles: { '50': 'a.mp3' } }).slowed).toBe(true);
+    expect(songFeatures({ ...base, speedFiles: {} }).slowed).toBe(false);
+    expect(songFeatures({ ...base, noGuitarFile: 'ng.mp3' }).noGuitar).toBe(true);
   });
 });

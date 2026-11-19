@@ -35,8 +35,9 @@
         </div>
 
         <div class="rail-controls">
-          <div class="segmented" role="group" aria-label="View">
-            <button id="view-toggle-button" class="segmented-option is-active" type="button">Score</button>
+          <div class="segmented view-switch" role="group" aria-label="View">
+            <button id="view-highway-button" class="segmented-option is-active" type="button" aria-pressed="true">Highway</button>
+            <button id="view-score-button" class="segmented-option" type="button" aria-pressed="false">Score</button>
           </div>
 
           <select id="track-select" class="rail-select" aria-label="Track"></select>
@@ -45,49 +46,66 @@
             <input id="guitar-toggle" type="checkbox" checked />
             <span>Guitar</span>
           </label>
-
-          <label class="control-checkbox" id="audio-source-row" hidden>
-            <input id="audio-source-toggle" type="checkbox" />
-            <span>Audio from OBS</span>
-          </label>
-
-          <label class="control-checkbox">
-            <input id="tab-only-toggle" type="checkbox" />
-            <span>Tab only</span>
-          </label>
-
-          <label class="control-checkbox" id="chord-names-row">
-            <input id="chord-names-toggle" type="checkbox" />
-            <span>Chord names</span>
-          </label>
         </div>
 
         <nav class="rail-actions">
           <button id="presentation-button" class="btn-text-green" type="button">Presentation</button>
           <button id="copy-link-button" class="btn-text-green" type="button">Practice link</button>
-          <button id="shortcuts-button" class="btn-text-green" type="button">Shortcuts</button>
-          <button id="open-another-button" class="btn-text-green" type="button">Open another</button>
+          <div class="rail-menu">
+            <button
+              id="menu-button"
+              class="menu-button"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-controls="menu-panel"
+              aria-label="More options"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+              <span class="menu-button-label">More</span>
+            </button>
+            <div id="menu-panel" class="menu-panel" hidden>
+              <label class="menu-item menu-check">
+                <input id="tab-only-toggle" type="checkbox" />
+                <span>Tab only</span>
+              </label>
+              <label class="menu-item menu-check" id="chord-names-row">
+                <input id="chord-names-toggle" type="checkbox" />
+                <span>Chord names</span>
+              </label>
+              <label class="menu-item menu-check" id="audio-source-row" hidden>
+                <input id="audio-source-toggle" type="checkbox" />
+                <span>Audio from OBS</span>
+              </label>
+              <hr class="menu-rule" />
+              <button id="shortcuts-button" class="menu-item" type="button">Keyboard shortcuts</button>
+              <button id="song-list-button" class="menu-item" type="button">Song list</button>
+              <button id="open-another-button" class="menu-item" type="button">Open a file…</button>
+            </div>
+          </div>
         </nav>
       </header>
 
       <p id="status" class="status" role="status"></p>
 
-      <div id="drop-zone" class="drop-zone">
-        <div>
-          <p id="drop-zone-text">Drag a <code>.gp</code> file here, or click to choose one</p>
-          <p id="pending-song-note" class="pending-note" hidden></p>
+      <section id="home" class="home">
+        <p id="pending-song-note" class="pending-note" hidden></p>
+
+        <section id="library" class="library" hidden>
+          <h2 class="home-heading">Songs</h2>
+          <ul id="library-list" class="library-grid"></ul>
+        </section>
+
+        <div id="drop-zone" class="own-file">
+          <button id="open-file-button" class="btn-green-outline" type="button">Open your own file</button>
+          <p id="drop-zone-text" class="own-file-hint">Guitar Pro (<code>.gp</code>)<span class="drop-hint"> — or drop it anywhere on this page</span></p>
+          <input id="file-input" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx" hidden />
         </div>
-        <input id="file-input" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx" hidden />
-      </div>
 
-      <section id="library" class="recent-songs" hidden>
-        <h2>Library</h2>
-        <ul id="library-list" class="recent-songs-list"></ul>
-      </section>
-
-      <section id="recent-songs" class="recent-songs" hidden>
-        <h2>Recent</h2>
-        <ul id="recent-songs-list" class="recent-songs-list"></ul>
+        <section id="recent-songs" class="recent-songs" hidden>
+          <h2 class="home-heading home-heading-small">Recent</h2>
+          <ul id="recent-songs-list" class="recent-songs-list"></ul>
+        </section>
       </section>
 
       <div id="player" class="player" hidden>
@@ -96,7 +114,7 @@
 
         <div id="highway" class="highway-surface" hidden>
           <div class="highway-header">
-            <div>
+            <div class="highway-heading">
               <span class="highway-title" id="highway-song-title"></span>
               <span class="highway-artist" id="highway-song-artist"></span>
             </div>
@@ -117,23 +135,28 @@
       </div>
 
       <div class="transport-dock" id="transport-dock">
-        <button id="play-button" class="btn-amber" type="button"><span id="play-button-label">Play</span></button>
+        <div class="dock-main">
+          <button id="play-button" class="btn-amber" type="button"><span id="play-button-label">Play</span></button>
 
-        <span id="time-current" class="time">0:00</span>
-        <div id="scrubber-wrap" class="scrubber-wrap">
-          <canvas id="overview-canvas" class="overview-canvas" aria-hidden="true"></canvas>
-          <div class="overview-played"></div>
-          <input id="scrubber" class="scrubber" type="range" min="0" max="1000" value="0" aria-label="Song position" />
+          <span id="time-current" class="time">0:00</span>
+          <div id="scrubber-wrap" class="scrubber-wrap">
+            <canvas id="overview-canvas" class="overview-canvas" aria-hidden="true"></canvas>
+            <div class="overview-played"></div>
+            <input id="scrubber" class="scrubber" type="range" min="0" max="1000" value="0" aria-label="Song position" />
+          </div>
+          <span id="time-total" class="time">0:00</span>
         </div>
-        <span id="time-total" class="time">0:00</span>
 
         <div class="dock-group">
           <div class="bar-counter">Bar <span id="bar-current">1</span> / <span id="bar-total">1</span></div>
 
-          <div class="stepper" aria-label="Speed">
-            <button id="speed-down-button" class="stepper-btn" type="button" aria-label="Slower">−</button>
-            <span id="speed-value" class="stepper-value">100%</span>
-            <button id="speed-up-button" class="stepper-btn" type="button" aria-label="Faster">+</button>
+          <div class="speed-wrap">
+            <div class="stepper" aria-label="Speed">
+              <button id="speed-down-button" class="stepper-btn" type="button" aria-label="Slower">−</button>
+              <span id="speed-value" class="stepper-value">100%</span>
+              <button id="speed-up-button" class="stepper-btn" type="button" aria-label="Faster">+</button>
+            </div>
+            <span id="speed-recording-badge" class="dock-badge" title="Playing a studio-quality slowed recording" hidden>Slowed recording</span>
           </div>
           <input id="speed-slider" type="range" min="50" max="120" step="5" value="100" hidden />
 
@@ -150,6 +173,12 @@
             /></span>
             <button id="loop-clear-button" class="loop-chip-clear" type="button" aria-label="Clear loop">×</button>
           </div>
+
+          <label class="switch" id="count-in-row" title="One bar of clicks before playing, and before each time round a loop">
+            <input id="count-in-toggle" type="checkbox" role="switch" checked />
+            <span class="switch-track" aria-hidden="true"></span>
+            <span class="switch-label">Count-in</span>
+          </label>
 
           <button id="exit-fullscreen-button" class="btn-exit-fullscreen" type="button" aria-label="Exit full screen">
             <svg class="btn-fullscreen-icon" viewBox="0 0 24 24" aria-hidden="true">

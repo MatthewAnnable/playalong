@@ -30,10 +30,20 @@ import { buildPracticeLink, readLinkParams, type LinkParams } from './ui/links';
 import { initShortcuts, registerAction } from './ui/shortcuts';
 import { initShortcutsPanel } from './ui/shortcuts-panel';
 import { initMode } from './ui/modes';
-import { fetchManifest, fetchSongBuffer, resolveManifestUrl, resolveSongUrl, type ManifestSong } from './ui/manifest';
+import {
+  fetchManifest,
+  fetchSongBuffer,
+  resolveManifestUrl,
+  resolveSongUrl,
+  songFeatures,
+  type ManifestSong,
+} from './ui/manifest';
+import { statusHoldMs } from './ui/status-timing';
+import { initMenu } from './ui/menu';
 
 const appEl = document.querySelector<HTMLElement>('#app')!;
-const dropZone = document.querySelector<HTMLDivElement>('#drop-zone')!;
+const openFileButton = document.querySelector<HTMLButtonElement>('#open-file-button')!;
+const songListButton = document.querySelector<HTMLButtonElement>('#song-list-button')!;
 const fileInput = document.querySelector<HTMLInputElement>('#file-input')!;
 const statusEl = document.querySelector<HTMLParagraphElement>('#status')!;
 const playerEl = document.querySelector<HTMLDivElement>('#player')!;
@@ -62,10 +72,23 @@ let linkParams: LinkParams = {};
 let pendingLinkParams: LinkParams | null = null;
 let latestState: Readonly<EngineState> | null = null;
 
+let statusTimer = 0;
+
+/**
+ * A brief message that floats over the page rather than taking a row of its
+ * own: ordinary messages fade after a few seconds, errors stay until the
+ * next message replaces them.
+ */
 function setStatus(message: string, isError = false): void {
+  window.clearTimeout(statusTimer);
   statusEl.textContent = message;
   statusEl.classList.toggle('is-error', isError);
+  statusEl.classList.toggle('is-shown', message !== '');
+  const hold = statusHoldMs(message, isError);
+  if (hold !== null) statusTimer = window.setTimeout(() => statusEl.classList.remove('is-shown'), hold);
 }
+
+statusEl.addEventListener('click', () => statusEl.classList.remove('is-shown'));
 
 /** The drop zone and recent/library lists belong to the empty state only. */
 function revealPlayer(): void {
@@ -182,42 +205,52 @@ async function renderRecentSongs(): Promise<void> {
     const li = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
-    button.innerHTML = `${song.title}${song.artist ? ` <span class="recent-song-artist">— ${song.artist}</span>` : ''}`;
+    button.textContent = song.title;
+    if (song.artist) {
+      const artist = document.createElement('span');
+      artist.className = 'recent-song-artist';
+      artist.textContent = `— ${song.artist}`;
+      button.append(' ', artist);
+    }
     button.addEventListener('click', () => void loadRecentSong(song));
     li.appendChild(button);
     recentSongsList.appendChild(li);
   }
 }
 
-dropZone.addEventListener('click', () => fileInput.click());
+openFileButton.addEventListener('click', () => fileInput.click());
 
 fileInput.addEventListener('change', () => {
   const file = fileInput.files?.[0];
+  fileInput.value = '';
   if (file) void handleFile(file);
 });
 
-dropZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  dropZone.classList.add('is-dragover');
+// A file can be dropped anywhere on the page: a Guitar Pro file on the song
+// list, or a second recording (a no-guitar version) onto a song already open.
+// Only drags that carry files light the page up.
+let dragDepth = 0;
+function isFileDrag(e: DragEvent): boolean {
+  return !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files');
+}
+window.addEventListener('dragenter', (e) => {
+  if (!isFileDrag(e)) return;
+  dragDepth++;
+  appEl.classList.add('is-dragover');
 });
-
-dropZone.addEventListener('dragleave', () => {
-  dropZone.classList.remove('is-dragover');
+window.addEventListener('dragleave', (e) => {
+  if (!isFileDrag(e)) return;
+  dragDepth = Math.max(dragDepth - 1, 0);
+  if (dragDepth === 0) appEl.classList.remove('is-dragover');
 });
-
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('is-dragover');
-  const file = e.dataTransfer?.files?.[0];
-  if (file) void handleFile(file);
+window.addEventListener('dragover', (e) => {
+  if (isFileDrag(e)) e.preventDefault();
 });
-
-// A second file can also be dropped onto the player itself (score view or
-// transport), not just the drop zone above it — that's the whole point of
-// adding a no-guitar track to a song already playing.
-playerEl.addEventListener('dragover', (e) => e.preventDefault());
-playerEl.addEventListener('drop', (e) => {
+window.addEventListener('drop', (e) => {
+  if (!isFileDrag(e)) return;
   e.preventDefault();
+  dragDepth = 0;
+  appEl.classList.remove('is-dragover');
   const file = e.dataTransfer?.files?.[0];
   if (file) void handleFile(file);
 });
@@ -244,10 +277,12 @@ function applyLinkParams(params: LinkParams): void {
   if (params.autoplay) void togglePlay();
 }
 
-function showPendingSongPrompt(params: LinkParams): void {
+function showPendingSongPrompt(params: LinkParams, notInLibrary = false): void {
   pendingLinkParams = params;
   const name = params.song ? params.song.replace(/-/g, ' ') : 'the song';
-  pendingSongNote.textContent = `Drop “${name}” here to continue`;
+  pendingSongNote.textContent = notInLibrary
+    ? `“${name}” isn't in the song list. If you have the file, drop it on this page or use Open your own file below — or pick a song from the list.`
+    : `Drop “${name}” on this page to continue, or choose it with Open your own file.`;
   pendingSongNote.hidden = false;
 }
 
@@ -304,6 +339,11 @@ onStateChange((state) => {
 });
 
 openAnotherButton.addEventListener('click', () => fileInput.click());
+// Back to the song list: the page as a student first sees it, with no song
+// or practice link in the address.
+songListButton.addEventListener('click', () => {
+  window.location.href = window.location.pathname;
+});
 copyLinkButton.addEventListener('click', copyPracticeLink);
 tapButton.addEventListener('click', () => {
   tapOverlay.hidden = true;
@@ -312,6 +352,7 @@ tapButton.addEventListener('click', () => {
 
 initShortcuts();
 initShortcutsPanel();
+initMenu();
 registerAction('copyLink', copyPracticeLink);
 initControls();
 initOverview();
@@ -368,8 +409,9 @@ async function loadFromManifest(manifestUrl: string, params: LinkParams): Promis
     // Not a library song (or the library couldn't be reached): it's one the
     // student has as a file, so now is the time to ask for it.
     if (wantsSong) {
-      showPendingSongPrompt(params);
-      setStatus(`“${params.song.replace(/-/g, ' ')}” isn't in the library. If you have the file, drop it above, or pick a song from the list.`, true);
+      // The note at the top of the song list says what to do; a floating
+      // error saying it again only covered the list.
+      showPendingSongPrompt(params, true);
     }
     return;
   }
@@ -384,6 +426,13 @@ async function loadFromManifest(manifestUrl: string, params: LinkParams): Promis
   }
 }
 
+const FEATURE_LABELS: { key: keyof ReturnType<typeof songFeatures>; label: string }[] = [
+  { key: 'video', label: 'Video' },
+  { key: 'slowed', label: 'Slowed recordings' },
+  { key: 'noGuitar', label: 'No-guitar track' },
+];
+
+/** The song list: one card per library song, with badges for what it comes with. */
 function renderLibrary(songs: ManifestSong[], manifestUrl: string): void {
   if (songs.length === 0) return;
   libraryEl.hidden = false;
@@ -392,7 +441,30 @@ function renderLibrary(songs: ManifestSong[], manifestUrl: string): void {
     const li = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
-    button.innerHTML = `${song.title}<span class="recent-song-artist"> — ${song.artist}</span>`;
+    button.className = 'song-tile';
+
+    const title = document.createElement('span');
+    title.className = 'song-tile-title';
+    title.textContent = song.title;
+    const artist = document.createElement('span');
+    artist.className = 'song-tile-artist';
+    artist.textContent = song.artist;
+    button.append(title, artist);
+
+    const features = songFeatures(song);
+    const badges = FEATURE_LABELS.filter((f) => features[f.key]);
+    if (badges.length) {
+      const row = document.createElement('span');
+      row.className = 'song-tile-badges';
+      for (const badge of badges) {
+        const el = document.createElement('span');
+        el.className = 'badge';
+        el.textContent = badge.label;
+        row.appendChild(el);
+      }
+      button.appendChild(row);
+    }
+
     button.addEventListener('click', async () => {
       setStatus(`Loading "${song.title}"…`);
       try {

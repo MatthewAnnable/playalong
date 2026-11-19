@@ -127,6 +127,16 @@ let presentationOn = false;
 let scoreViewVisible = true;
 
 let countInToken = 0;
+/**
+ * Whether a bar of clicks comes before playing and before each time round a
+ * loop. Off, a loop goes straight round. The switch is in the dock; the
+ * choice is remembered per device (see ui/prefs.ts).
+ */
+let countInEnabled = true;
+
+export function setCountInEnabled(on: boolean): void {
+  countInEnabled = on;
+}
 
 const state: EngineState = {
   ready: false,
@@ -865,6 +875,11 @@ export function isHorizontalScore(): boolean {
  * on a count-in that is no longer current.
  */
 async function runCountIn(tick: number): Promise<boolean> {
+  if (!countInEnabled) {
+    // Still supersede any count-in already running, as a new one would.
+    countInToken++;
+    return true;
+  }
   const masterBar = timeline[playedIndexAtTick(timeline, tick)]?.masterBar;
   if (!masterBar) return true;
   const token = ++countInToken;

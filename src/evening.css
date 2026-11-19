@@ -140,9 +140,6 @@ body:not(:has(#app.obs)) {
 }
 
 .rail-song h1 { font-weight: 800; letter-spacing: -0.03em; }
-#drop-zone-text { font-weight: 700; letter-spacing: -0.02em; }
-.recent-songs h2 { font-weight: 700; }
-.recent-songs-list button { font-weight: 600; }
 .modal-title { font-weight: 700; }
 .highway-title { font-weight: 700; letter-spacing: -0.015em; }
 

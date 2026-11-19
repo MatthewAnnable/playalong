@@ -16,7 +16,8 @@ import defaultTheme from '../theme/themes/default.json';
 const alphatabSurface = document.querySelector<HTMLDivElement>('#alphatab')!;
 const highwaySurface = document.querySelector<HTMLDivElement>('#highway')!;
 const canvas = document.querySelector<HTMLCanvasElement>('#highway-canvas')!;
-const viewToggleButton = document.querySelector<HTMLButtonElement>('#view-toggle-button')!;
+const viewHighwayButton = document.querySelector<HTMLButtonElement>('#view-highway-button')!;
+const viewScoreButton = document.querySelector<HTMLButtonElement>('#view-score-button')!;
 const chordNamesToggle = document.querySelector<HTMLInputElement>('#chord-names-toggle')!;
 
 const barInfoEl = document.querySelector<HTMLSpanElement>('#highway-bar-info')!;
@@ -121,7 +122,10 @@ export function setHighwayView(visible: boolean): void {
   alphatabSurface.hidden = visible;
   highwaySurface.hidden = !visible;
   setScoreViewVisible(!visible);
-  viewToggleButton.textContent = visible ? 'Highway' : 'Score';
+  viewHighwayButton.classList.toggle('is-active', visible);
+  viewHighwayButton.setAttribute('aria-pressed', String(visible));
+  viewScoreButton.classList.toggle('is-active', !visible);
+  viewScoreButton.setAttribute('aria-pressed', String(!visible));
   if (visible) {
     const v = ensureView();
     v.resize();
@@ -169,7 +173,8 @@ export function initHighway(): void {
     }
   });
 
-  viewToggleButton.addEventListener('click', () => setHighwayView(!showingHighway));
+  viewHighwayButton.addEventListener('click', () => setHighwayView(true));
+  viewScoreButton.addEventListener('click', () => setHighwayView(false));
 
   chordNamesToggle.addEventListener('change', () => {
     ensureView().setChordPills(chordNamesToggle.checked);

@@ -1,3 +1,4 @@
+import { fingerLegendStyle } from './legend';
 import type { BarMarker, NoteEvent } from '../engine/notes';
 import type { Theme } from '../theme/theme';
 import { pillTextFor } from '../theme/theme';
@@ -789,6 +790,12 @@ export class HighwayView {
     // It stands in the strip above the board and may dip into the board's
     // far margin, but never down to the high e string.
     const floor = this.board.top + (this.boardY(this.uFor(this.laneCenterY(0))) - this.board.top) * 0.45;
+    // On a phone-sized board the hand is too small to read: four numbered
+    // dots in the finger colours say the same thing.
+    if (fingerLegendStyle(width) === 'dots') {
+      this.drawFingerDots(width, floor);
+      return;
+    }
     const h = Math.min(floor - this.px(6), this.px(spec.height ?? 80));
     if (h < 18) return;
     const fingerW = h * 0.2;
@@ -841,6 +848,44 @@ export class HighwayView {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(key, fx + r, top + r + fingerW * 0.04);
+    }
+    ctx.restore();
+  }
+
+  /** The small-board legend: a row of dots 1 2 3 4 in the finger colours, at the top right. */
+  private drawFingerDots(width: number, floor: number): void {
+    const ctx = this.ctx;
+    const theme = this.theme;
+    const r = 10;
+    const gap = 6;
+    const right = width - 12;
+    const cy = Math.max(r + 6, Math.min(floor - r - 4, 30));
+    ctx.save();
+    // A backing in the stage colour, so a bar number scrolling past never
+    // reads as a fifth dot. OBS's stage is see-through, so it goes without.
+    const ground = theme.stage.background;
+    if (ground && !/^rgba\([^)]*,\s*0\)$/.test(ground) && ground !== 'transparent') {
+      const left = right - 4 * (r * 2) - 3 * gap - 6;
+      ctx.fillStyle = ground;
+      this.roundRectPath(left, cy - r - 4, right + 6 - left, r * 2 + 8, r + 4, r + 4, r + 4, r + 4);
+      ctx.fill();
+    }
+    ctx.globalAlpha = this.theme.handLegend?.opacity ?? 1;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = theme.keyline;
+    ctx.font = '800 12px Manrope, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let f = 0; f < 4; f++) {
+      const key = String(f + 1) as '1' | '2' | '3' | '4';
+      const cx = right - (3 - f) * (r * 2 + gap) - r;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = theme.fingers[key];
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = pillTextFor(theme, key);
+      ctx.fillText(key, cx, cy + 0.5);
     }
     ctx.restore();
   }

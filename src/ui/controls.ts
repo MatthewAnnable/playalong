@@ -7,11 +7,13 @@ import {
   setTabOnly,
   setTrackIndex,
   setGuitarOn,
+  setCountInEnabled,
   setPresentationMode,
   togglePlay,
   type EngineState,
 } from '../engine/alphatab';
 import { registerAction } from './shortcuts';
+import { readCountIn, writeCountIn } from './prefs';
 
 const playButton = document.querySelector<HTMLButtonElement>('#play-button')!;
 const playButtonLabel = document.querySelector<HTMLSpanElement>('#play-button-label')!;
@@ -38,6 +40,8 @@ const presentationButton = document.querySelector<HTMLButtonElement>('#presentat
 const fullscreenButton = document.querySelector<HTMLButtonElement>('#fullscreen-button')!;
 const exitFullscreenButton = document.querySelector<HTMLButtonElement>('#exit-fullscreen-button')!;
 const appEl = document.querySelector<HTMLElement>('#app')!;
+const speedRecordingBadge = document.querySelector<HTMLSpanElement>('#speed-recording-badge')!;
+const countInToggle = document.querySelector<HTMLInputElement>('#count-in-toggle')!;
 
 let currentState: Readonly<EngineState>;
 let isScrubbing = false;
@@ -186,9 +190,11 @@ export function initControls(): void {
     speedSlider.value = String(state.speed);
     setText(speedValue, `${state.speed}%`);
     speedValue.title = state.speedFromRecording ? 'Playing a studio-quality slowed recording' : '';
+    if (speedRecordingBadge.hidden === state.speedFromRecording) speedRecordingBadge.hidden = !state.speedFromRecording;
 
     loopToggle.checked = state.loopEnabled;
     loopChip.classList.toggle('is-disabled', !state.loopEnabled);
+    loopChip.classList.toggle('is-on', state.loopEnabled);
     if (document.activeElement !== loopStart) loopStart.value = String(state.loopStartBar);
     if (document.activeElement !== loopEnd) loopEnd.value = String(state.loopEndBar);
     loopStart.max = String(state.totalBars);
@@ -292,6 +298,14 @@ export function initControls(): void {
     if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') return;
     loopToggle.checked = !loopToggle.checked;
     applyLoopFromInputs();
+  });
+
+  // Count-in: on unless this device switched it off.
+  countInToggle.checked = readCountIn();
+  setCountInEnabled(countInToggle.checked);
+  countInToggle.addEventListener('change', () => {
+    setCountInEnabled(countInToggle.checked);
+    writeCountIn(countInToggle.checked);
   });
 
   tabOnlyToggle.addEventListener('change', () => {
