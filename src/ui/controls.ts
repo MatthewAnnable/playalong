@@ -40,7 +40,6 @@ const presentationButton = document.querySelector<HTMLButtonElement>('#presentat
 const fullscreenButton = document.querySelector<HTMLButtonElement>('#fullscreen-button')!;
 const exitFullscreenButton = document.querySelector<HTMLButtonElement>('#exit-fullscreen-button')!;
 const appEl = document.querySelector<HTMLElement>('#app')!;
-const speedRecordingBadge = document.querySelector<HTMLSpanElement>('#speed-recording-badge')!;
 const countInToggle = document.querySelector<HTMLInputElement>('#count-in-toggle')!;
 
 let currentState: Readonly<EngineState>;
@@ -190,7 +189,6 @@ export function initControls(): void {
     speedSlider.value = String(state.speed);
     setText(speedValue, `${state.speed}%`);
     speedValue.title = state.speedFromRecording ? 'Playing a studio-quality slowed recording' : '';
-    if (speedRecordingBadge.hidden === state.speedFromRecording) speedRecordingBadge.hidden = !state.speedFromRecording;
 
     loopToggle.checked = state.loopEnabled;
     loopChip.classList.toggle('is-disabled', !state.loopEnabled);

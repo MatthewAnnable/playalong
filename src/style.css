@@ -432,7 +432,7 @@
 
 /* Where the presentation dock is short of room, the way out is just the
    corners icon. */
-@media (max-width: 1280px) {
+@media (max-width: 1440px) {
   #app.presentation .btn-exit-fullscreen {
     padding: 0 12px;
   }
@@ -652,7 +652,9 @@
 }
 
 .loop-bar-input {
-  width: 2.4em;
+  /* Room for a three-digit bar (songs run past 99 bars). */
+  width: calc(3ch + 10px);
+  padding: 0;
   border: none;
   background: none;
   font-family: var(--ma-font-mono);
@@ -875,14 +877,23 @@
   right: auto;
   bottom: 40px;
   transform: translateX(-50%);
-  width: 1200px;
+  width: 1320px;
   max-width: calc(100vw - 40px);
-  height: 104px;
+  height: auto;
+  min-height: 104px;
   border-radius: var(--ma-radius-pill);
   background: rgba(13, 17, 11, 0.9);
   border: none;
   justify-content: center;
   transition: opacity 0.15s ease;
+  /* If the controls ever outgrow one line they drop to a second row rather
+     than sliding over the song map. */
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+#app.presentation .dock-main {
+  flex: 1 1 480px;
 }
 
 /* On the half-height board the dock sits in the free top half, just above
@@ -896,6 +907,17 @@
    nothing at all — the press both brings the dock back and works. */
 #app.presentation.chrome-hidden .transport-dock {
   opacity: 0;
+}
+
+/* Full screen over the board: the board's own header already reads
+   "Bar 86 / 143", so the dock leaves it out and the song map keeps its room. */
+#app.presentation:has(#highway:not([hidden])) .dock-group .bar-counter {
+  display: none;
+}
+
+/* The song map never shrinks to a sliver under the buttons beside it. */
+#app.presentation .scrubber-wrap {
+  min-width: 200px;
 }
 
 #app.presentation .time,
@@ -1105,8 +1127,7 @@ body:has(#app.obs) {
   padding-top: 12px;
 }
 
-.badge,
-.dock-badge {
+.badge {
   display: inline-flex;
   align-items: center;
   font-family: var(--ma-font-ui);
@@ -1119,10 +1140,6 @@ body:has(#app.obs) {
   border: 1px solid var(--ma-green-line);
   color: var(--ma-green);
   white-space: nowrap;
-}
-
-.dock-badge[hidden] {
-  display: none;
 }
 
 .speed-wrap {
@@ -1733,23 +1750,6 @@ body:has(#app.obs) {
     width: 1.8em;
   }
 
-  /* "Slowed recording" tucks under the speed, inside the stepper. */
-  .speed-wrap .dock-badge {
-    position: absolute;
-    left: 50%;
-    bottom: 3px;
-    transform: translateX(-50%);
-    padding: 0;
-    border: none;
-    background: none;
-    font-size: 9px;
-    letter-spacing: 0.02em;
-    pointer-events: none;
-  }
-
-  .speed-wrap:has(.dock-badge:not([hidden])) .stepper-value {
-    padding-bottom: 10px;
-  }
 }
 
 
