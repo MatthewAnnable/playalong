@@ -1,4 +1,4 @@
-import { AlphaTabApi, LayoutMode, PlayerMode, ScrollMode, Settings, StaveProfile } from '@coderline/alphatab';
+import { AlphaTabApi, LayoutMode, NotationElement, PlayerMode, ScrollMode, Settings, StaveProfile } from '@coderline/alphatab';
 import { midi, model, synth } from '@coderline/alphatab';
 import { playCountIn } from './countIn';
 import { extractBarMarkers, extractNotes, trackNamesChords, type BarMarker, type NoteEvent } from './notes';
@@ -735,8 +735,60 @@ function fitScoreToStrip(): void {
   api.updateSettings();
   api.render();
 }
-/** Where the played bar sits across the stage, left to right. */
+/** Where the played bar sits across the stage, left to right, in the old smooth-scrolling line. */
 const HORIZONTAL_READING_POINT = 0.25;
+
+/**
+ * How the horizontal line moves. 'flip' (the default since 26/11/2026): the
+ * line stands still while the cursor walks along it, and when the bar being
+ * played runs off the right edge, the line slides so that bar sits at the
+ * left. Matthew found the smoothly scrolling line hard to read on a lesson
+ * video (30 frames a second, so it moved in visible jumps). `?scroll=smooth`
+ * brings back the line that travels past a fixed reading point.
+ */
+const HORIZONTAL_FLIP = new URLSearchParams(location.search).get('scroll') !== 'smooth';
+/** In flip mode, the gap left before the bar that's just come over to the left edge. */
+const FLIP_LEFT_MARGIN = 24;
+/** In flip mode, how long the slide to the next stretch takes: quick, so it reads as a page turn. */
+const FLIP_SLIDE_MS = 250;
+
+/**
+ * Marks that make the one-line score taller without helping anyone play
+ * along. On one long line a single tempo mark or "mf" in bar 1 adds its band
+ * to the height of the whole line, so the line had to be drawn smaller to fit
+ * the lesson strip. They come back on the page view.
+ */
+const HIDDEN_ON_LINE = [
+  NotationElement.EffectTempo,
+  NotationElement.EffectDynamics,
+  NotationElement.EffectCrescendo,
+  NotationElement.GuitarTuning,
+];
+
+/** Tab numbers on the one-line score: larger than the page's 14px, to read across a room (plain, not bold: Matthew's choice). */
+const LINE_TAB_FONT_SIZE = 17;
+let pageTabFont: model.Font | null = null;
+
+function applyLineReadability(horizontal: boolean): void {
+  if (!api) return;
+  const elements = api.settings.notation.elements;
+  for (const element of HIDDEN_ON_LINE) elements.set(element, !horizontal);
+  // The page's gaps above and below each line of music; one line needs none.
+  const display = api.settings.display;
+  display.systemPaddingTop = horizontal ? 0 : 10;
+  display.systemPaddingBottom = horizontal ? 0 : 10;
+  display.lastSystemPaddingBottom = horizontal ? 0 : 5;
+  const resources = display.resources;
+  pageTabFont ??= resources.tablatureFont;
+  resources.tablatureFont = horizontal
+    ? model.Font.withFamilyList(pageTabFont.families, LINE_TAB_FONT_SIZE, model.FontStyle.Plain, model.FontWeight.Regular)
+    : pageTabFont;
+}
+
+/** alphaTab's scrollOffsetX for the horizontal line: where the played bar is put after a scroll. */
+function horizontalScrollOffset(): number {
+  return HORIZONTAL_FLIP ? -FLIP_LEFT_MARGIN : -Math.round(container.clientWidth * HORIZONTAL_READING_POINT);
+}
 
 const INK = new model.Color(46, 42, 40);
 const INK_SOFT = new model.Color(106, 98, 92);
@@ -744,19 +796,21 @@ const INK_ON_DARK = new model.Color(251, 248, 243);
 const LINE_ON_DARK = new model.Color(140, 134, 126);
 
 /**
- * The score view goes onto the dark stage in presentation mode (build plan
- * 5.5), but alphaTab draws its notation in near-black ink — so without
- * recolouring it, presentation mode rendered black-on-black.
+ * Full screen keeps the score on paper, dark ink on the light sheet, as in
+ * the page view (Matthew, 26/11/2026: white on black was harder to read).
+ * Only the OBS overlay, drawn straight over the camera on a transparent
+ * stage, needs light ink.
  */
 export function setPresentationMode(on: boolean): void {
   if (!api) return;
+  const onDark = on && !!document.querySelector('#app.obs');
   const resources = api.settings.display.resources;
-  resources.mainGlyphColor = on ? INK_ON_DARK : INK;
-  resources.secondaryGlyphColor = on ? LINE_ON_DARK : INK_SOFT;
-  resources.staffLineColor = on ? LINE_ON_DARK : INK_SOFT;
-  resources.barSeparatorColor = on ? LINE_ON_DARK : INK_SOFT;
-  resources.barNumberColor = on ? INK_ON_DARK : INK_SOFT;
-  resources.scoreInfoColor = on ? INK_ON_DARK : INK;
+  resources.mainGlyphColor = onDark ? INK_ON_DARK : INK;
+  resources.secondaryGlyphColor = onDark ? LINE_ON_DARK : INK_SOFT;
+  resources.staffLineColor = onDark ? LINE_ON_DARK : INK_SOFT;
+  resources.barSeparatorColor = onDark ? LINE_ON_DARK : INK_SOFT;
+  resources.barNumberColor = onDark ? INK_ON_DARK : INK_SOFT;
+  resources.scoreInfoColor = onDark ? INK_ON_DARK : INK;
   presentationOn = on;
   applyScoreLayout(wantsHorizontal());
   api.updateSettings();
@@ -834,12 +888,14 @@ function applyScoreLayout(horizontal: boolean): void {
   // and smaller on a short window so the tab staff never falls off the bottom
   // (see fitScoreToStrip).
   display.scale = horizontal ? horizontalScale() : 1;
-  // Smooth keeps the line moving with the music rather than jumping a bar at a
-  // time. The reading point sits at HORIZONTAL_READING_POINT across the stage —
-  // far enough in that the bars just played stay on screen to talk about, while
-  // most of the width is still look-ahead.
-  player.scrollMode = horizontal ? ScrollMode.Smooth : ScrollMode.OffScreen;
-  player.scrollOffsetX = horizontal ? -Math.round(container.clientWidth * HORIZONTAL_READING_POINT) : 0;
+  // Flip (see HORIZONTAL_FLIP) is alphaTab's OffScreen mode: it scrolls only
+  // when the bar being played no longer fits on screen, putting that bar at
+  // the left. Smooth keeps the line moving with the music, with the played bar
+  // at HORIZONTAL_READING_POINT across the stage.
+  player.scrollMode = horizontal && !HORIZONTAL_FLIP ? ScrollMode.Smooth : ScrollMode.OffScreen;
+  player.scrollOffsetX = horizontal ? horizontalScrollOffset() : 0;
+  player.scrollSpeed = horizontal && HORIZONTAL_FLIP ? FLIP_SLIDE_MS : 300;
+  applyLineReadability(horizontal);
   player.nativeBrowserSmoothScroll = !horizontal;
   // alphaTab only renders the partials it believes are on screen. The
   // horizontal strip is scrolled by script inside a clipped container, which
@@ -857,7 +913,7 @@ function applyScoreLayout(horizontal: boolean): void {
 window.addEventListener('resize', () => {
   if (!api || !horizontalScore) return;
   api.settings.display.scale = horizontalScale();
-  api.settings.player.scrollOffsetX = -Math.round(container.clientWidth * HORIZONTAL_READING_POINT);
+  api.settings.player.scrollOffsetX = horizontalScrollOffset();
   api.updateSettings();
   api.render();
 });

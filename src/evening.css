@@ -173,7 +173,14 @@ body:not(:has(#app.obs)) {
   border-radius: 20px;
   padding: 12px;
 }
-#app:not(.presentation) .alphatab-surface .at-cursor-bar { background: rgba(63, 122, 74, 0.14); }
+#app:not(.obs) .alphatab-surface .at-cursor-bar { background: rgba(63, 122, 74, 0.14); }
+
+/* Full screen keeps the paper too (white on black was harder to read), as an
+   edge-to-edge sheet. Only the OBS overlay, over the camera, stays dark. */
+#app.presentation:not(.obs) .alphatab-surface {
+  --ma-green: var(--sheet-accent);
+  background: var(--sheet);
+}
 
 /* The top rail was a fixed 80px with everything on one line, which cut the
    song's name down to "R U …" even on a wide screen. It now grows instead:

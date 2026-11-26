@@ -1002,7 +1002,7 @@
   margin-top: var(--strip-top);
   height: var(--strip-height);
   min-height: 0;
-  padding: 1vh 0;
+  padding: 0.5vh 0;
 }
 
 /* Keeps the score's top margin inside the player (as for the video above). */
