@@ -973,6 +973,43 @@
   box-sizing: border-box;
 }
 
+/* `?strip=1` (Matthew's lesson link, see stripBand in modes.ts): in full
+   screen the board or the scrolling score sits exactly in the band OBS crops
+   for the music strip. The song line goes just under the band and the dock to
+   the foot of the screen, so neither is in the shot. */
+#app.presentation.strip .highway-surface {
+  justify-content: flex-start;
+  padding-top: var(--strip-top);
+  box-sizing: border-box;
+}
+
+#app.presentation.strip #highway-canvas {
+  flex: none;
+  height: var(--strip-height);
+}
+
+#app.presentation.strip .highway-header {
+  top: calc(var(--strip-top) + var(--strip-height));
+  bottom: auto;
+}
+
+#app.presentation.strip .transport-dock,
+#app.presentation.strip:has(#highway:not([hidden])) .transport-dock {
+  bottom: 40px;
+}
+
+#app.presentation.strip .alphatab-surface.is-horizontal {
+  margin-top: var(--strip-top);
+  height: var(--strip-height);
+  min-height: 0;
+  padding: 1vh 0;
+}
+
+/* Keeps the score's top margin inside the player (as for the video above). */
+#app.presentation.strip .player {
+  display: flow-root;
+}
+
 /* The loop chip's chrome colours (dark green ink on a light border) were
    designed for the paper dock — on the dark, translucent presentation dock
    they read as two shades of barely-visible dark green, so on/off was a

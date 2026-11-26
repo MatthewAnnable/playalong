@@ -29,7 +29,7 @@ import { listRecentSongs, saveRecentSong, type RecentSong } from './ui/library';
 import { buildPracticeLink, readLinkParams, type LinkParams } from './ui/links';
 import { initShortcuts, registerAction } from './ui/shortcuts';
 import { initShortcutsPanel } from './ui/shortcuts-panel';
-import { initMode } from './ui/modes';
+import { initMode, stripBand } from './ui/modes';
 import {
   fetchManifest,
   fetchSongBuffer,
@@ -386,7 +386,8 @@ async function openManifestSong(manifestUrl: string, song: ManifestSong): Promis
     videos.push({ url: resolveSongUrl(manifestUrl, { ...song, file: song.videoFile }), track: undefined, offsetSeconds: song.videoOffsetSeconds, focusY: song.videoFocusY });
   }
   // `?video=off` leaves the video out, to compare the board without it.
-  const videoOff = new URLSearchParams(location.search).get('video') === 'off';
+  // `?strip=1` leaves it out too: the strip is for the music alone.
+  const videoOff = new URLSearchParams(location.search).get('video') === 'off' || stripBand() !== null;
   if (videos.length && !videoOff) setSongVideos(videos);
   else clearSongVideo();
   if (song.noGuitarFile) {

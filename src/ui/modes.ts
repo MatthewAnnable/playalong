@@ -52,6 +52,39 @@ function applyBoardHeight(): void {
   document.documentElement.style.setProperty('--board-fraction', String(fraction));
 }
 
+/**
+ * OBS's "iPad Band" (the music strip in Matthew's lesson scenes) crops the
+ * Sidecar iPad screen to rows 204-860 of 1970: 10.4% of the way down, a
+ * third of the height, full width.
+ */
+const OBS_STRIP_BAND = { top: 204 / 1970, height: 656 / 1970 };
+
+/**
+ * `?strip=1` is Matthew's lesson setting and is never in a student's link
+ * (share links rebuild the address without it). In full screen it puts the
+ * board or the scrolling score exactly in that band, with the song line and
+ * the controls below it, out of the shot, and leaves the song video out.
+ * `?strip=0.1,0.33` gives the band's top and height by hand, should the OBS
+ * crop ever change.
+ */
+export function stripBand(): { top: number; height: number } | null {
+  const raw = new URLSearchParams(location.search).get('strip');
+  if (raw === null || raw === '0' || raw === 'off') return null;
+  const [top, height] = raw.split(',').map(Number);
+  if (Number.isFinite(top) && Number.isFinite(height) && top >= 0 && height > 0.1 && top + height <= 1) {
+    return { top, height };
+  }
+  return OBS_STRIP_BAND;
+}
+
+function applyStripBand(): void {
+  const band = stripBand();
+  if (!band) return;
+  appEl.classList.add('strip');
+  document.documentElement.style.setProperty('--strip-top', `${band.top * 100}vh`);
+  document.documentElement.style.setProperty('--strip-height', `${band.height * 100}vh`);
+}
+
 function initObsMode(): void {
   appEl.classList.add('obs', 'presentation');
   applyTransparentStage();
@@ -179,6 +212,7 @@ function initRemoteMode(): void {
 
 export function initMode(rawMode: string | undefined): AppMode {
   applyBoardHeight();
+  applyStripBand();
   if (rawMode === 'obs') {
     mode = 'obs';
     initObsMode();

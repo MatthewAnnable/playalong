@@ -60,6 +60,14 @@ being played, and the transport dock sits there too so it never covers the
 low strings. Add `&board=0.4` (anything from 0.25 to 1) to the URL to change
 how much of the screen the board takes.
 
+**Lesson strip (`?strip=1`, Matthew only).** With the iPad as a Sidecar
+screen, OBS's "iPad Band" crops a full-width band 10.4% down the iPad, a third
+of its height, for the music strip. `?strip=1` puts the board or the
+scrolling score exactly in that band in full screen, with the song line and
+the controls below it, out of the shot, and leaves the song video out.
+`?strip=0.1,0.33` sets the band's top and height by hand if the OBS crop
+changes. Practice links never carry it, so students don't see it.
+
 ## A video of the song being played
 
 A library song can carry a silent video of you playing it. In the normal view
